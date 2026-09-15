@@ -1,29 +1,39 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
+local Window = Rayfield:CreateWindow({
+    Name = "Egg Hub",
+    LoadingTitle = "Rayfield Gen2 Interface",
+    ConfigurationSaving = {
+        Enabled = false
+    }
+})
+
+-- Fixed: Passed as a table dictionary
+local Tab = Window:CreateTab({
+    Name = "Egg Automation",
+    Icon = 4483362458
+})
+
+-- Services & State Variables
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-
 local LocalPlayer = Players.LocalPlayer
-local RenderedEggs = Workspace:WaitForChild("RenderedEggs", 10)
-local Plots = Workspace:WaitForChild("Plots", 10)
 
--- State Variables
-local AutoFarmEnabled = false
-local ESPEnabled = false
-local GlideSpeed = 50
 local SelectedEggs = {}
+local GlideSpeed = 50
+local AutofarmEnabled = false
+local EggESPEnabled = false
 local ActiveHighlights = {}
 
--- Utility: Fetch Player Plot
-local function getMyPlot()
-    if not Plots then return nil end
-    for _, plot in ipairs(Plots:GetChildren()) do
+-- Plot Verification Helper
+local function GetPlayerPlot()
+    if not Workspace:FindFirstChild("Plots") then return nil end
+    for _, plot in ipairs(Workspace.Plots:GetChildren()) do
         local data = plot:FindFirstChild("Data")
-        if data then
-            local owner = data:FindFirstChild("Owner")
-            if owner and (owner.Value == LocalPlayer.Name or owner.Value == LocalPlayer) then
+        if data and data:FindFirstChild("Owner") then
+            local ownerVal = data.Owner.Value
+            if ownerVal == LocalPlayer or ownerVal == LocalPlayer.Name then
                 return plot
             end
         end
@@ -31,112 +41,83 @@ local function getMyPlot()
     return nil
 end
 
--- Utility: Fetch Egg List
-local function getEggList()
-    local eggNames = {}
-    local hash = {}
-    if RenderedEggs then
-        for _, egg in ipairs(RenderedEggs:GetChildren()) do
-            if not hash[egg.Name] then
-                hash[egg.Name] = true
-                table.insert(eggNames, egg.Name)
-            end
-        end
+-- Glide Movement Helper
+local function GlideTo(targetPosition)
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+    local hrp = char.HumanoidRootPart
+
+    while AutofarmEnabled and char and hrp do
+        local currentPos = hrp.Position
+        local distance = (targetPosition - currentPos).Magnitude
+        
+        if distance <= 5 then break end
+
+        local direction = (targetPosition - currentPos).Unit
+        local dt = RunService.Heartbeat:Wait()
+        hrp.CFrame = CFrame.new(hrp.Position + (direction * (GlideSpeed * dt)), targetPosition)
     end
-    return eggNames
+    return AutofarmEnabled
 end
 
--- Movement: Smooth Glide/Fly to Target
-local function glideTo(targetCFrame)
-    local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    local root = character.HumanoidRootPart
-
-    local distance = (root.Position - targetCFrame.Position).Magnitude
-    local duration = distance / math.max(GlideSpeed, 1)
-
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(root, tweenInfo, { CFrame = targetCFrame })
-    
-    tween:Play()
-    
-    -- Keep player afloat while gliding
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.Parent = root
-
-    tween.Completed:Wait()
-    bodyVelocity:Destroy()
-end
-
--- ESP Management
-local function updateESP()
-    for instance, highlight in pairs(ActiveHighlights) do
-        if not instance.Parent or not ESPEnabled then
-            highlight:Destroy()
-            ActiveHighlights[instance] = nil
-        end
-    end
-
-    if not ESPEnabled or not RenderedEggs then return end
-
-    for _, egg in ipairs(RenderedEggs:GetChildren()) do
-        if not ActiveHighlights[egg] then
-            local highlight = Instance.new("Highlight")
-            highlight.Adornee = egg
-            highlight.FillColor = Color3.fromRGB(255, 215, 0)
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.FillTransparency = 0.5
-            highlight.Parent = egg
-            ActiveHighlights[egg] = highlight
-        end
-    end
-end
-
--- Create Rayfield Window
-local Window = Rayfield:CreateWindow({
-    Name = "Egg Hub | Rayfield Gen2",
-    LoadingTitle = "Loading Automation...",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "EggHubConfigs",
-        FileName = "Config"
-    }
-})
-
-local Tab = Window:CreateTab("Egg Farm", "egg")
-
-Tab:CreateSection("Egg ESP")
-
+-- 1. Egg ESP Toggle
 Tab:CreateToggle({
     Name = "Egg ESP",
     CurrentValue = false,
     Flag = "EggESP",
     Callback = function(Value)
-        ESPEnabled = Value
-        updateESP()
+        EggESPEnabled = Value
+        if not Value then
+            for _, hl in pairs(ActiveHighlights) do
+                if hl then hl:Destroy() end
+            end
+            table.clear(ActiveHighlights)
+        end
     end,
 })
 
-Tab:CreateSection("Autofarm Controls")
+-- 2. Autofarm Egg Toggle
+Tab:CreateToggle({
+    Name = "Autofarm Egg",
+    CurrentValue = false,
+    Flag = "AutofarmEgg",
+    Callback = function(Value)
+        AutofarmEnabled = Value
+        if Value then
+            task.spawn(function()
+                while AutofarmEnabled do
+                    local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
+                    local playerPlot = GetPlayerPlot()
 
-local EggDropdown = Tab:CreateDropdown({
-    Name = "Select Eggs to Farm",
-    Options = getEggList(),
-    CurrentOption = {},
-    MultipleOptions = true,
-    Flag = "EggSelection",
-    Callback = function(Options)
-        SelectedEggs = Options
+                    if renderedFolder and playerPlot then
+                        for _, egg in ipairs(renderedFolder:GetChildren()) do
+                            if not AutofarmEnabled then break end
+
+                            if table.find(SelectedEggs, egg.Name) or #SelectedEggs == 0 then
+                                local targetPos = egg:IsA("Model") and egg:GetPivot().Position or egg.Position
+                                local plotPos = playerPlot:IsA("Model") and playerPlot:GetPivot().Position or playerPlot.Position
+
+                                if GlideTo(targetPos) then
+                                    task.wait(0.3)
+                                    GlideTo(plotPos)
+                                    task.wait(0.5)
+                                end
+                            end
+                        end
+                    end
+                    task.wait(1)
+                end
+            end)
+        end
     end,
 })
 
+-- 3. Glide Speed Slider
 Tab:CreateSlider({
-    Name = "Glide Speed",
-    Range = {10, 200},
+    Name = "Autofarm Egg Glide Speed",
+    Range = {10, 300},
     Increment = 5,
-    Suffix = " Studs/s",
+    Suffix = " studs/sec",
     CurrentValue = 50,
     Flag = "GlideSpeed",
     Callback = function(Value)
@@ -144,55 +125,47 @@ Tab:CreateSlider({
     end,
 })
 
-Tab:CreateToggle({
-    Name = "Autofarm Egg",
-    CurrentValue = false,
-    Flag = "AutofarmEgg",
-    Callback = function(Value)
-        AutoFarmEnabled = Value
-        if Value then
-            task.spawn(function()
-                while AutoFarmEnabled do
-                    task.wait(0.5)
-                    local plot = getMyPlot()
-                    if not plot then continue end
-
-                    if RenderedEggs then
-                        for _, egg in ipairs(RenderedEggs:GetChildren()) do
-                            if not AutoFarmEnabled then break end
-                            
-                            -- Check if selected or if no selection was made (farms all)
-                            local isSelected = #SelectedEggs == 0 or table.find(SelectedEggs, egg.Name)
-                            
-                            if isSelected and egg:IsA("BasePart") or egg:IsA("Model") then
-                                local targetCFrame = egg:IsA("Model") and egg:GetPivot() or egg.CFrame
-                                
-                                -- 1. Glide to Egg
-                                glideTo(targetCFrame)
-                                task.wait(0.2)
-
-                                -- 2. Glide back to Player Plot Delivery Point
-                                local plotCFrame = plot:IsA("Model") and plot:GetPivot() or plot.CFrame
-                                glideTo(plotCFrame + Vector3.new(0, 3, 0))
-                                task.wait(0.5)
-                            end
-                        end
-                    end
-                end
-            end)
-        end
+-- 4. Dynamic Multiselect Dropdown
+local EggDropdown = Tab:CreateDropdown({
+    Name = "Select Target Eggs",
+    Options = {"Loading..."},
+    MultipleOptions = true,
+    Flag = "EggSelection",
+    Callback = function(Options)
+        SelectedEggs = Options
     end,
 })
 
--- Listeners for Realtime Updates
-if RenderedEggs then
-    RenderedEggs.ChildAdded:Connect(function()
-        EggDropdown:Refresh(getEggList())
-        if ESPEnabled then updateESP() end
-    end)
-    
-    RenderedEggs.ChildRemoved:Connect(function()
-        EggDropdown:Refresh(getEggList())
-        if ESPEnabled then updateESP() end
-    end)
+-- Realtime Dropdown List & ESP Sync
+local function FetchEggNames()
+    local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
+    local eggSet = {}
+    local uniqueNames = {}
+
+    if renderedFolder then
+        for _, egg in ipairs(renderedFolder:GetChildren()) do
+            if not eggSet[egg.Name] then
+                eggSet[egg.Name] = true
+                table.insert(uniqueNames, egg.Name)
+            end
+
+            if EggESPEnabled and not ActiveHighlights[egg] then
+                local hl = Instance.new("Highlight")
+                hl.Adornee = egg
+                hl.FillColor = Color3.fromRGB(255, 215, 0)
+                hl.Parent = egg
+                ActiveHighlights[egg] = hl
+            end
+        end
+    end
+    return uniqueNames
 end
+
+task.spawn(function()
+    while task.wait(2) do
+        local updatedList = FetchEggNames()
+        if #updatedList > 0 then
+            EggDropdown:Refresh(updatedList)
+        end
+    end
+end)
