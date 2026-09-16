@@ -4,7 +4,9 @@ local Window = Rayfield:CreateWindow({
     Name = "Egg Hub",
     LoadingTitle = "Rayfield Gen2 Interface",
     ConfigurationSaving = {
-        Enabled = false
+        Enabled = true,
+        FolderName = "EggHubConfigs",
+        FileName = "Config"
     }
 })
 
@@ -19,6 +21,16 @@ local EggTab = Window:CreateTab({
     Icon = 4483362458
 })
 
+-- Extracted Eggs List from ModuleScript
+local ExtractedEggsList = {
+    "Dragon Egg", "Giant Egg", "White Egg", "Brown Egg", "Cracked Egg",
+    "Easter Egg", "Stone Egg", "Leaf Egg", "Mushroom Egg", "Flower Egg",
+    "Slime Egg", "Ice Egg", "Glass Egg", "Golden Egg", "Diamond Egg",
+    "Crystal Egg", "Skull Egg", "Asteroid Egg", "Dominus Egg", "Flaming Egg",
+    "Sinister Egg", "Soul Egg", "Aurora Egg", "Galaxy Egg", "Blackhole Egg",
+    "Cherub Egg"
+}
+
 -- Services & State Variables
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -27,6 +39,7 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local SelectedEggsLookup = {}
+local NestEggsLookup = {}
 local FlySpeed = 400
 local AutofarmEnabled = false
 local EggESPEnabled = false
@@ -100,6 +113,34 @@ local function IsNestFree(nest)
             return false
         end
     end
+    return true
+end
+
+-- Held/Inventory Egg Matcher for Nest Placement
+local function CheckAndEquipNestEgg()
+    if next(NestEggsLookup) == nil then return true end
+
+    local char = LocalPlayer.Character
+    if char then
+        for _, item in ipairs(char:GetChildren()) do
+            if item:IsA("Tool") and NestEggsLookup[item.Name] then
+                return true
+            end
+        end
+    end
+
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and NestEggsLookup[item.Name] then
+                if char and char:FindFirstChildOfClass("Humanoid") then
+                    char.Humanoid:EquipTool(item)
+                end
+                return true
+            end
+        end
+    end
+
     return true
 end
 
@@ -237,9 +278,9 @@ FarmTab:CreateSlider({
     end,
 })
 
-local EggDropdown = FarmTab:CreateDropdown({
+FarmTab:CreateDropdown({
     Name = "Select Target Eggs",
-    Options = {"Loading..."},
+    Options = ExtractedEggsList,
     MultipleOptions = true,
     Flag = "EggSelection",
     Callback = function(Options)
@@ -257,6 +298,25 @@ local EggDropdown = FarmTab:CreateDropdown({
 })
 
 -- TAB 2: EGG (Nest & Hatch Automation)
+EggTab:CreateDropdown({
+    Name = "Select Eggs for Nest",
+    Options = ExtractedEggsList,
+    MultipleOptions = true,
+    Flag = "NestEggSelection",
+    Callback = function(Options)
+        table.clear(NestEggsLookup)
+        if type(Options) == "table" then
+            for k, v in pairs(Options) do
+                if type(k) == "number" then
+                    NestEggsLookup[v] = true
+                elseif type(k) == "string" and (v == true or v == k) then
+                    NestEggsLookup[k] = true
+                end
+            end
+        end
+    end,
+})
+
 EggTab:CreateToggle({
     Name = "Auto Put Egg to Nest",
     CurrentValue = false,
@@ -271,10 +331,9 @@ EggTab:CreateToggle({
                     local gameRemotes = remotes and remotes:FindFirstChild("Game")
                     local eggPlaced = gameRemotes and gameRemotes:FindFirstChild("EggPlaced")
 
-                    if plot and eggPlaced then
+                    if plot and eggPlaced and CheckAndEquipNestEgg() then
                         local nestsFolder = plot:FindFirstChild("Nests")
                         if nestsFolder then
-                            -- Checks nests 1-5 for free slots
                             for nestId = 1, 5 do
                                 if not AutoNestEnabled then break end
                                 local nest = nestsFolder:FindFirstChild(tostring(nestId))
@@ -311,7 +370,6 @@ EggTab:CreateToggle({
                     if plot and hatchRemote then
                         local eggsFolder = plot:FindFirstChild("Eggs")
                         if eggsFolder then
-                            -- Reads EggKey attribute from each egg in plot.Eggs
                             for _, egg in ipairs(eggsFolder:GetChildren()) do
                                 if not AutoHatchEnabled then break end
                                 local eggKey = egg:GetAttribute("EggKey")
@@ -331,36 +389,25 @@ EggTab:CreateToggle({
     end,
 })
 
--- Dynamic Multiselect & ESP Updater Loop
-local function FetchEggNames()
-    local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
-    local eggSet = {}
-    local uniqueNames = {}
-
-    if renderedFolder then
-        for _, egg in ipairs(renderedFolder:GetChildren()) do
-            if not eggSet[egg.Name] then
-                eggSet[egg.Name] = true
-                table.insert(uniqueNames, egg.Name)
-            end
-
-            if EggESPEnabled and not ActiveHighlights[egg] then
-                local hl = Instance.new("Highlight")
-                hl.Adornee = egg
-                hl.FillColor = Color3.fromRGB(255, 215, 0)
-                hl.Parent = egg
-                ActiveHighlights[egg] = hl
-            end
-        end
-    end
-    return uniqueNames
-end
-
+-- ESP Updater Loop
 task.spawn(function()
-    while task.wait(2) do
-        local updatedList = FetchEggNames()
-        if #updatedList > 0 then
-            EggDropdown:Refresh(updatedList)
+    while task.wait(1) do
+        if EggESPEnabled then
+            local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
+            if renderedFolder then
+                for _, egg in ipairs(renderedFolder:GetChildren()) do
+                    if not ActiveHighlights[egg] then
+                        local hl = Instance.new("Highlight")
+                        hl.Adornee = egg
+                        hl.FillColor = Color3.fromRGB(255, 215, 0)
+                        hl.Parent = egg
+                        ActiveHighlights[egg] = hl
+                    end
+                end
+            end
         end
     end
 end)
+
+-- Load Saved Configuration on Script Startup
+Rayfield:LoadConfiguration()
