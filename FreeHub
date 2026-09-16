@@ -1,4 +1,53 @@
+local HttpService = game:GetService("HttpService")
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+
+-- =================================================================
+-- CUSTOM JSON CONFIG MANAGER
+-- =================================================================
+local CONFIG_FILE = "EggHubConfig.json"
+
+local ConfigData = {
+    FlySpeed = 400,
+    EggESP = false,
+    AutofarmEgg = false,
+    AutoPutEgg = false,
+    AutoHatchEgg = false,
+    InfZoom = false,
+    AntiAFK = false,
+    FastMode = false,
+    ShowTopBar = true,
+    SelectedEggs = {},
+    NestEggs = {}
+}
+
+local function SaveConfigToFile()
+    if writefile then
+        local success, err = pcall(function()
+            local json = HttpService:JSONEncode(ConfigData)
+            writefile(CONFIG_FILE, json)
+        end)
+        if not success then
+            warn("Failed to save config:", err)
+        end
+    end
+end
+
+local function LoadConfigFromFile()
+    if readfile and isfile and isfile(CONFIG_FILE) then
+        local success, result = pcall(function()
+            local json = readfile(CONFIG_FILE)
+            return HttpService:JSONDecode(json)
+        end)
+        if success and type(result) == "table" then
+            for k, v in pairs(result) do
+                ConfigData[k] = v
+            end
+        end
+    end
+end
+
+-- Pre-load settings from JSON before initializing UI
+LoadConfigFromFile()
 
 -- =================================================================
 -- SERVICES & UTILITIES
@@ -15,7 +64,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local SelectedEggsLookup = {}
 local NestEggsLookup = {}
-local FlySpeed = 400
+local FlySpeed = ConfigData.FlySpeed
 local AutofarmEnabled = false
 local EggESPEnabled = false
 local AutoNestEnabled = false
@@ -47,7 +96,10 @@ local ExtractedEggsList = {
     "Cherub Egg"
 }
 
--- Fetch Cash directly from LocalPlayer.SavedData.Cash
+-- Populate initial lookups from config
+for _, egg in ipairs(ConfigData.SelectedEggs or {}) do SelectedEggsLookup[egg] = true end
+for _, egg in ipairs(ConfigData.NestEggs or {}) do NestEggsLookup[egg] = true end
+
 local function GetPlayerCash()
     local cash = 0
     pcall(function()
@@ -61,7 +113,6 @@ local function GetPlayerCash()
     return cash
 end
 
--- Fetch $/s directly from LocalPlayer.leaderstats["Income/s"]
 local function GetPlayerIncome()
     local income = nil
     pcall(function()
@@ -115,7 +166,6 @@ local function GetPlayerPlotCenter()
     return centerCFrame.Position + Vector3.new(0, 4, 0)
 end
 
--- Teleport function to player's plot
 local function TeleportToMyPlot()
     local plotCenter = GetPlayerPlotCenter()
     if plotCenter then
@@ -128,7 +178,6 @@ local function TeleportToMyPlot()
     end
 end
 
--- Teleport function to position player in front of workspace.Stalls.[StallName]
 local function TeleportToStall(stallName)
     local stallsFolder = Workspace:FindFirstChild("Stalls")
     if not stallsFolder then
@@ -282,11 +331,7 @@ local Window = Rayfield:CreateWindow({
     Name = "Egg Hub",
     LoadingTitle = "Egg Hub Interface",
     LoadingSubtitle = "Rayfield Interface",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "EggHubConfig",
-        FileName = "SavedSettings"
-    }
+    ConfigurationSaving = { Enabled = false } -- Disabled built-in Rayfield config system
 })
 
 local HomeTab = Window:CreateTab({ Name = "🏠 Home" })
@@ -337,45 +382,45 @@ HomeTab:CreateButton({
 -- =================================================================
 FarmTab:CreateSection({ Name = "👁️ Visuals & Movement" })
 
-FarmTab:CreateToggle({
+local EggESPToggle = FarmTab:CreateToggle({
     Name = "Egg ESP",
-    CurrentValue = false,
-    Flag = "EggESP",
+    CurrentValue = ConfigData.EggESP,
     Callback = function(Value)
         EggESPEnabled = Value
+        ConfigData.EggESP = Value
+        SaveConfigToFile()
         if not Value then
             for _, hl in pairs(ActiveHighlights) do
                 if hl then hl:Destroy() end
             end
             table.clear(ActiveHighlights)
         end
-        Rayfield:SaveConfiguration()
     end,
 })
 
-FarmTab:CreateSlider({
+local FlySpeedSlider = FarmTab:CreateSlider({
     Name = "Autofarm Fly Speed",
     Range = {100, 3000},
     Increment = 50,
     Suffix = " studs/sec",
-    CurrentValue = 400,
-    Flag = "FlySpeed",
+    CurrentValue = ConfigData.FlySpeed,
     Callback = function(Value)
         FlySpeed = Value
-        Rayfield:SaveConfiguration()
+        ConfigData.FlySpeed = Value
+        SaveConfigToFile()
     end,
 })
 
 FarmTab:CreateSection({ Name = "🌾 Farm Controls" })
 
-FarmTab:CreateToggle({
+local AutofarmToggle = FarmTab:CreateToggle({
     Name = "Autofarm Egg",
-    CurrentValue = false,
-    Flag = "AutofarmEgg",
+    CurrentValue = ConfigData.AutofarmEgg,
     Callback = function(Value)
         AutofarmEnabled = Value
+        ConfigData.AutofarmEgg = Value
+        SaveConfigToFile()
         SetNoclip(Value)
-        Rayfield:SaveConfiguration()
         
         if Value then
             task.spawn(function()
@@ -421,24 +466,26 @@ FarmTab:CreateToggle({
     end,
 })
 
-FarmTab:CreateDropdown({
+local TargetEggsDropdown = FarmTab:CreateDropdown({
     Name = "Select Target Eggs",
     Options = ExtractedEggsList,
-    CurrentOption = {},
+    CurrentOption = ConfigData.SelectedEggs,
     MultipleOptions = true,
-    Flag = "EggSelection",
     Callback = function(Options)
         table.clear(SelectedEggsLookup)
+        ConfigData.SelectedEggs = {}
         if type(Options) == "table" then
             for k, v in pairs(Options) do
                 if type(k) == "number" then
                     SelectedEggsLookup[v] = true
+                    table.insert(ConfigData.SelectedEggs, v)
                 elseif type(k) == "string" and (v == true or v == k) then
                     SelectedEggsLookup[k] = true
+                    table.insert(ConfigData.SelectedEggs, k)
                 end
             end
         end
-        Rayfield:SaveConfiguration()
+        SaveConfigToFile()
     end,
 })
 
@@ -447,36 +494,38 @@ FarmTab:CreateDropdown({
 -- =================================================================
 EggTab:CreateSection({ Name = "🪹 Nest Configuration" })
 
-EggTab:CreateDropdown({
+local NestEggsDropdown = EggTab:CreateDropdown({
     Name = "Select Eggs for Nest",
     Options = ExtractedEggsList,
-    CurrentOption = {},
+    CurrentOption = ConfigData.NestEggs,
     MultipleOptions = true,
-    Flag = "NestEggSelection",
     Callback = function(Options)
         table.clear(NestEggsLookup)
+        ConfigData.NestEggs = {}
         if type(Options) == "table" then
             for k, v in pairs(Options) do
                 if type(k) == "number" then
                     NestEggsLookup[v] = true
+                    table.insert(ConfigData.NestEggs, v)
                 elseif type(k) == "string" and (v == true or v == k) then
                     NestEggsLookup[k] = true
+                    table.insert(ConfigData.NestEggs, k)
                 end
             end
         end
-        Rayfield:SaveConfiguration()
+        SaveConfigToFile()
     end,
 })
 
 EggTab:CreateSection({ Name = "🔄 Automation Loops" })
 
-EggTab:CreateToggle({
+local AutoPutToggle = EggTab:CreateToggle({
     Name = "Auto Put Egg to Nest",
-    CurrentValue = false,
-    Flag = "AutoPutEgg",
+    CurrentValue = ConfigData.AutoPutEgg,
     Callback = function(Value)
         AutoNestEnabled = Value
-        Rayfield:SaveConfiguration()
+        ConfigData.AutoPutEgg = Value
+        SaveConfigToFile()
         if Value then
             task.spawn(function()
                 while AutoNestEnabled do
@@ -506,13 +555,13 @@ EggTab:CreateToggle({
     end,
 })
 
-EggTab:CreateToggle({
+local AutoHatchToggle = EggTab:CreateToggle({
     Name = "Auto Hatch Egg",
-    CurrentValue = false,
-    Flag = "AutoHatchEgg",
+    CurrentValue = ConfigData.AutoHatchEgg,
     Callback = function(Value)
         AutoHatchEnabled = Value
-        Rayfield:SaveConfiguration()
+        ConfigData.AutoHatchEgg = Value
+        SaveConfigToFile()
         if Value then
             task.spawn(function()
                 while AutoHatchEnabled do
@@ -548,12 +597,24 @@ EggTab:CreateToggle({
 MiscTab:CreateSection({ Name = "💾 Settings Management" })
 
 MiscTab:CreateButton({
-    Name = "💾 Save Configuration Now",
+    Name = "💾 Save Config (Manual)",
     Callback = function()
-        Rayfield:SaveConfiguration()
+        SaveConfigToFile()
         Rayfield:Notify({
             Title = "Config Saved",
-            Content = "Your settings have been saved!",
+            Content = "Saved directly to workspace/" .. CONFIG_FILE,
+            Duration = 3
+        })
+    end,
+})
+
+MiscTab:CreateButton({
+    Name = "📂 Reload Config File",
+    Callback = function()
+        LoadConfigFromFile()
+        Rayfield:Notify({
+            Title = "Config Reloaded",
+            Content = "Loaded settings from " .. CONFIG_FILE,
             Duration = 3
         })
     end,
@@ -569,13 +630,13 @@ MiscTab:CreateButton({ Name = "💰 TP Sell Stall", Callback = function() Telepo
 
 MiscTab:CreateSection({ Name = "⚙️ Player Options" })
 
-MiscTab:CreateToggle({
+local InfZoomToggle = MiscTab:CreateToggle({
     Name = "Infinite Zoom",
-    CurrentValue = false,
-    Flag = "InfZoom",
+    CurrentValue = ConfigData.InfZoom,
     Callback = function(Value)
         InfZoomEnabled = Value
-        Rayfield:SaveConfiguration()
+        ConfigData.InfZoom = Value
+        SaveConfigToFile()
         if Value then
             LocalPlayer.CameraMaxZoomDistance = 100000
         else
@@ -584,13 +645,13 @@ MiscTab:CreateToggle({
     end,
 })
 
-MiscTab:CreateToggle({
+local AntiAFKToggle = MiscTab:CreateToggle({
     Name = "Anti-AFK",
-    CurrentValue = false,
-    Flag = "AntiAFK",
+    CurrentValue = ConfigData.AntiAFK,
     Callback = function(Value)
         AntiAFKEnabled = Value
-        Rayfield:SaveConfiguration()
+        ConfigData.AntiAFK = Value
+        SaveConfigToFile()
         if Value then
             if not AntiAFKConnection then
                 AntiAFKConnection = LocalPlayer.Idled:Connect(function()
@@ -610,13 +671,13 @@ MiscTab:CreateToggle({
 
 MiscTab:CreateSection({ Name = "🚀 Optimization" })
 
-MiscTab:CreateToggle({
+local FastModeToggle = MiscTab:CreateToggle({
     Name = "Fast Mode (FPS Booster)",
-    CurrentValue = false,
-    Flag = "FastMode",
+    CurrentValue = ConfigData.FastMode,
     Callback = function(Value)
         FastModeEnabled = Value
-        Rayfield:SaveConfiguration()
+        ConfigData.FastMode = Value
+        SaveConfigToFile()
         if Value then
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
@@ -721,17 +782,17 @@ end
 
 BuildTopBarHUD()
 
-MiscTab:CreateToggle({
+local ShowTopBarToggle = MiscTab:CreateToggle({
     Name = "Show Top Teleport Bar",
-    CurrentValue = true,
-    Flag = "ShowTopBar",
+    CurrentValue = ConfigData.ShowTopBar,
     Callback = function(Value)
+        ConfigData.ShowTopBar = Value
+        SaveConfigToFile()
         local parentGui = LocalPlayer:FindFirstChild("PlayerGui")
         local bar = parentGui and parentGui:FindFirstChild("StallTeleportBar")
         if bar then
             bar.Enabled = Value
         end
-        Rayfield:SaveConfiguration()
     end,
 })
 
@@ -802,6 +863,3 @@ task.spawn(function()
         end
     end
 end)
-
--- Automatically load saved settings on execution
-Rayfield:LoadConfiguration()
