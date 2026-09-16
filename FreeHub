@@ -23,8 +23,6 @@ local AutofarmEnabled = false
 local EggESPEnabled = false
 local AutoNestEnabled = false
 local AutoHatchEnabled = false
-local AutoSellPetsEnabled = false
-local AutoClaimPlotEnabled = true
 local InfZoomEnabled = false
 local FastModeEnabled = false
 local AntiAFKEnabled = false
@@ -53,11 +51,79 @@ local ExtractedEggsList = {
     "Cherub Egg"
 }
 
--- Save original lighting state for Fast Mode toggle restoration
 OriginalLightingSettings = {
     GlobalShadows = Lighting.GlobalShadows,
     FogEnd = Lighting.FogEnd
 }
+
+-- =================================================================
+-- HELPER FUNCTIONS
+-- =================================================================
+local function GetPlayerCash()
+    local cash = 0
+    pcall(function()
+        if LocalPlayer:FindFirstChild("SavedData") and LocalPlayer.SavedData:FindFirstChild("Cash") then
+            cash = LocalPlayer.SavedData.Cash.Value
+        elseif LocalPlayer:FindFirstChild("leaderstats") then
+            local cashVal = LocalPlayer.leaderstats:FindFirstChild("Cash") or LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("Money")
+            if cashVal then cash = cashVal.Value end
+        end
+    end)
+    return cash
+end
+
+local function GetPlayerIncome()
+    local income = nil
+    pcall(function()
+        if LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Income/s") then
+            income = LocalPlayer.leaderstats["Income/s"].Value
+        end
+    end)
+    return income
+end
+
+local function GetPing()
+    local ping = 0
+    pcall(function()
+        if LocalPlayer and LocalPlayer:FindFirstChild("GetNetworkPing") then
+            ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
+        elseif StatsService:FindFirstChild("Network") and StatsService.Network:FindFirstChild("ServerStatsItem") then
+            local pingItem = StatsService.Network.ServerStatsItem:FindFirstChild("Data Ping")
+            if pingItem then ping = math.floor(pingItem:GetValue()) end
+        end
+    end)
+    return ping
+end
+
+local function GetPlayerPlot()
+    if not Workspace:FindFirstChild("Plots") then return nil end
+    for _, plot in ipairs(Workspace.Plots:GetChildren()) do
+        local data = plot:FindFirstChild("Data")
+        if data and data:FindFirstChild("Owner") then
+            local ownerVal = data.Owner.Value
+            if ownerVal == LocalPlayer or ownerVal == LocalPlayer.Name then
+                return plot
+            end
+        end
+    end
+    return nil
+end
+
+local function GetPlayerPlotCenter()
+    local plot = GetPlayerPlot()
+    if not plot then return nil end
+    
+    local centerCFrame
+    if plot:IsA("Model") then
+        centerCFrame = plot:GetPivot()
+    elseif plot:IsA("BasePart") then
+        centerCFrame = plot.CFrame
+    else
+        local base = plot:FindFirstChild("Base") or plot:FindFirstChild("Baseplate") or plot:FindFirstChildWhichIsA("BasePart")
+        centerCFrame = base and base.CFrame or CFrame.new()
+    end
+    return centerCFrame.Position + Vector3.new(0, 4, 0)
+end
 
 -- =================================================================
 -- WINDOW & CUSTOM HIGH-CONTRAST THEME
@@ -139,107 +205,6 @@ local function QuickToast(title, subtitle)
     end)
 end
 
--- =================================================================
--- HELPER FUNCTIONS & LOGIC
--- =================================================================
-local function GetPlayerCash()
-    local cash = 0
-    pcall(function()
-        if LocalPlayer:FindFirstChild("SavedData") and LocalPlayer.SavedData:FindFirstChild("Cash") then
-            cash = LocalPlayer.SavedData.Cash.Value
-        elseif LocalPlayer:FindFirstChild("leaderstats") then
-            local cashVal = LocalPlayer.leaderstats:FindFirstChild("Cash") or LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("Money")
-            if cashVal then cash = cashVal.Value end
-        end
-    end)
-    return cash
-end
-
-local function GetPlayerIncome()
-    local income = nil
-    pcall(function()
-        if LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Income/s") then
-            income = LocalPlayer.leaderstats["Income/s"].Value
-        end
-    end)
-    return income
-end
-
-local function GetPing()
-    local ping = 0
-    pcall(function()
-        if LocalPlayer and LocalPlayer:FindFirstChild("GetNetworkPing") then
-            ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
-        elseif StatsService:FindFirstChild("Network") and StatsService.Network:FindFirstChild("ServerStatsItem") then
-            local pingItem = StatsService.Network.ServerStatsItem:FindFirstChild("Data Ping")
-            if pingItem then ping = math.floor(pingItem:GetValue()) end
-        end
-    end)
-    return ping
-end
-
-local function GetPlayerPlot()
-    if not Workspace:FindFirstChild("Plots") then return nil end
-    for _, plot in ipairs(Workspace.Plots:GetChildren()) do
-        local data = plot:FindFirstChild("Data")
-        if data and data:FindFirstChild("Owner") then
-            local ownerVal = data.Owner.Value
-            if ownerVal == LocalPlayer or ownerVal == LocalPlayer.Name then
-                return plot
-            end
-        end
-    end
-    return nil
-end
-
-local function AutoClaimPlot()
-    if GetPlayerPlot() then return end
-    if not Workspace:FindFirstChild("Plots") then return end
-
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    local gameRemotes = remotes and remotes:FindFirstChild("Game")
-    local claimRemote = gameRemotes and gameRemotes:FindFirstChild("ClaimPlot")
-
-    for _, plot in ipairs(Workspace.Plots:GetChildren()) do
-        local data = plot:FindFirstChild("Data")
-        if data and data:FindFirstChild("Owner") and (data.Owner.Value == nil or data.Owner.Value == "" or data.Owner.Value == "None") then
-            if claimRemote then
-                claimRemote:FireServer(plot)
-                QuickToast("Plot Claimed", "Claimed an open plot automatically")
-            else
-                local claimPart = plot:FindFirstChild("Claim") or plot:FindFirstChild("TouchPart") or plot:FindFirstChildWhichIsA("BasePart", true)
-                local char = LocalPlayer.Character
-                if claimPart and char and char:FindFirstChild("HumanoidRootPart") then
-                    firetouchinterest(char.HumanoidRootPart, claimPart, 0)
-                    task.wait(0.1)
-                    firetouchinterest(char.HumanoidRootPart, claimPart, 1)
-                end
-            end
-            break
-        end
-    end
-end
-
-local function GetPlayerPlotCenter()
-    local plot = GetPlayerPlot()
-    if not plot then 
-        AutoClaimPlot()
-        plot = GetPlayerPlot()
-        if not plot then return nil end
-    end
-    
-    local centerCFrame
-    if plot:IsA("Model") then
-        centerCFrame = plot:GetPivot()
-    elseif plot:IsA("BasePart") then
-        centerCFrame = plot.CFrame
-    else
-        local base = plot:FindFirstChild("Base") or plot:FindFirstChild("Baseplate") or plot:FindFirstChildWhichIsA("BasePart")
-        centerCFrame = base and base.CFrame or CFrame.new()
-    end
-    return centerCFrame.Position + Vector3.new(0, 4, 0)
-end
-
 local function TeleportToMyPlot()
     local plotCenter = GetPlayerPlotCenter()
     if plotCenter then
@@ -249,7 +214,7 @@ local function TeleportToMyPlot()
             QuickToast("Teleported", "Moved to your plot")
         end
     else
-        SafeNotify("Teleport Error", "Could not find or claim a plot!", 3)
+        SafeNotify("Teleport Error", "Could not find your plot!", 3)
     end
 end
 
@@ -493,6 +458,7 @@ FarmTab:CreateToggle({
 
                     if renderedFolder and plotCenter then
                         local targetEgg = nil
+                        
                         if next(SelectedEggsLookup) ~= nil then
                             for _, egg in ipairs(renderedFolder:GetChildren()) do
                                 if SelectedEggsLookup[egg.Name] then
@@ -500,16 +466,16 @@ FarmTab:CreateToggle({
                                     break
                                 end
                             end
-                        else
-                            targetEgg = renderedFolder:GetChildren()[1]
                         end
 
                         if targetEgg and targetEgg.Parent then
                             local reached = FlyToTarget(targetEgg)
+
                             if reached and targetEgg.Parent and targetEgg:IsDescendantOf(Workspace) then
                                 InteractWithEgg(targetEgg)
-                                task.wait(1.20)
+                                task.wait(1.30)
                             end
+                            
                             if AutofarmEnabled then
                                 FlyToTarget(plotCenter)
                                 task.wait(0.2)
@@ -644,30 +610,6 @@ EggTab:CreateToggle({
     end,
 })
 
-EggTab:CreateToggle({
-    Name = "Auto Sell Pets",
-    Flag = "AutoSellPets",
-    CurrentValue = false,
-    Callback = function(Value)
-        AutoSellPetsEnabled = Value
-        if Value then
-            task.spawn(function()
-                while AutoSellPetsEnabled do
-                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                    local gameRemotes = remotes and remotes:FindFirstChild("Game")
-                    local sellRemote = gameRemotes and (gameRemotes:FindFirstChild("SellPets") or gameRemotes:FindFirstChild("Sell"))
-
-                    if sellRemote then
-                        sellRemote:FireServer()
-                        PetsSoldCount = PetsSoldCount + 1
-                    end
-                    task.wait(1.5)
-                end
-            end)
-        end
-    end,
-})
-
 -- Misc Tab
 MiscTab:CreateSection({ Name = "💾 Settings Management" })
 MiscTab:CreateButton({
@@ -696,16 +638,6 @@ MiscTab:CreateButton({ Name = "💰 TP Sell Stall", Callback = function() Telepo
 
 MiscTab:CreateDivider({ text = "preferences" })
 MiscTab:CreateSection({ Name = "⚙️ Player Options" })
-
-MiscTab:CreateToggle({
-    Name = "Auto Claim Open Plot",
-    Flag = "AutoClaimPlot",
-    CurrentValue = true,
-    Callback = function(Value)
-        AutoClaimPlotEnabled = Value
-        if Value then AutoClaimPlot() end
-    end,
-})
 
 MiscTab:CreateToggle({
     Name = "Infinite Zoom",
@@ -880,27 +812,28 @@ task.spawn(function()
 
     while task.wait(0.5) do
         pcall(function()
-            if AutoClaimPlotEnabled and not GetPlayerPlot() then
-                AutoClaimPlot()
-            end
-
             local elapsedMinutes = math.floor((os.time() - SessionStartTime) / 60)
             local activeFeatures = (AutofarmEnabled and 1 or 0) 
                 + (EggESPEnabled and 1 or 0) 
                 + (AutoNestEnabled and 1 or 0) 
                 + (AutoHatchEnabled and 1 or 0) 
-                + (AutoSellPetsEnabled and 1 or 0) 
                 + (InfZoomEnabled and 1 or 0) 
                 + (FastModeEnabled and 1 or 0) 
                 + (AntiAFKEnabled and 1 or 0)
 
             local currentCash = GetPlayerCash()
-            local now = os.clock()
-            local dt = now - LastCashCheckTime
-            if dt >= 1 then
-                CashPerSecond = math.max(0, math.floor((currentCash - PreviousCash) / dt))
-                PreviousCash = currentCash
-                LastCashCheckTime = now
+            local directIncome = GetPlayerIncome()
+
+            if directIncome then
+                CashPerSecond = directIncome
+            else
+                local now = os.clock()
+                local timeDiff = now - LastCashCheckTime
+                if timeDiff >= 1 then
+                    CashPerSecond = math.max(0, math.floor((currentCash - PreviousCash) / timeDiff))
+                    PreviousCash = currentCash
+                    LastCashCheckTime = now
+                end
             end
 
             CashStat:Set(currentCash)
@@ -911,7 +844,7 @@ task.spawn(function()
 
             SessionStat:Set(elapsedMinutes)
             FeaturesStat:Set(activeFeatures)
-            FpsStat:Set(math.floor(workspace:GetRealPhysicsFPS() or 60))
+            FpsStat:Set(math.floor(Workspace:GetRealPhysicsFPS() or 60))
             PingStat:Set(GetPing())
             PlayersStat:Set(#Players:GetPlayers())
         end)
@@ -926,12 +859,10 @@ task.spawn(function()
                 local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
                 if renderedFolder then
                     for _, egg in ipairs(renderedFolder:GetChildren()) do
-                        if (next(SelectedEggsLookup) == nil or SelectedEggsLookup[egg.Name]) and not ActiveHighlights[egg] then
+                        if not ActiveHighlights[egg] then
                             local hl = Instance.new("Highlight")
-                            hl.Name = "EggESP"
-                            hl.FillColor = Color3.fromRGB(0, 255, 150)
-                            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                            hl.FillTransparency = 0.5
+                            hl.Adornee = egg
+                            hl.FillColor = Color3.fromRGB(255, 215, 0)
                             hl.Parent = egg
                             ActiveHighlights[egg] = hl
                         end
@@ -940,4 +871,11 @@ task.spawn(function()
             end)
         end
     end
+end)
+
+-- Deferred Config Load
+task.defer(function()
+    pcall(function()
+        Window:Load()
+    end)
 end)
