@@ -1,11 +1,15 @@
 local HttpService = game:GetService("HttpService")
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
--- Helper function to safely send notifications
+-- Robust notification helper that prevents any crashing
 local function SafeNotify(data)
     pcall(function()
-        if Rayfield and Rayfield.Notify then
-            Rayfield:Notify(data)
+        if type(Rayfield) == "table" then
+            if typeof(Rayfield.Notify) == "function" then
+                Rayfield:Notify(data)
+            elseif data and data.Title and data.Content then
+                print("[Egg Hub Notification] " .. data.Title .. ": " .. data.Content)
+            end
         end
     end)
 end
