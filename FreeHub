@@ -1,6 +1,15 @@
 local HttpService = game:GetService("HttpService")
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
+-- Helper function to safely send notifications
+local function SafeNotify(data)
+    pcall(function()
+        if Rayfield and Rayfield.Notify then
+            Rayfield:Notify(data)
+        end
+    end)
+end
+
 -- =================================================================
 -- CUSTOM JSON CONFIG MANAGER
 -- =================================================================
@@ -174,20 +183,20 @@ local function TeleportToMyPlot()
             char.HumanoidRootPart.CFrame = CFrame.new(plotCenter)
         end
     else
-        Rayfield:Notify({ Title = "Teleport Error", Content = "Could not find your plot!", Duration = 3 })
+        SafeNotify({ Title = "Teleport Error", Content = "Could not find your plot!", Duration = 3 })
     end
 end
 
 local function TeleportToStall(stallName)
     local stallsFolder = Workspace:FindFirstChild("Stalls")
     if not stallsFolder then
-        Rayfield:Notify({ Title = "Teleport Error", Content = "Workspace.Stalls folder not found!", Duration = 3 })
+        SafeNotify({ Title = "Teleport Error", Content = "Workspace.Stalls folder not found!", Duration = 3 })
         return
     end
 
     local stall = stallsFolder:FindFirstChild(stallName)
     if not stall then
-        Rayfield:Notify({ Title = "Teleport Error", Content = "Stall '" .. stallName .. "' not found!", Duration = 3 })
+        SafeNotify({ Title = "Teleport Error", Content = "Stall '" .. stallName .. "' not found!", Duration = 3 })
         return
     end
 
@@ -331,7 +340,7 @@ local Window = Rayfield:CreateWindow({
     Name = "Egg Hub",
     LoadingTitle = "Egg Hub Interface",
     LoadingSubtitle = "Rayfield Interface",
-    ConfigurationSaving = { Enabled = false } -- Disabled built-in Rayfield config system
+    ConfigurationSaving = { Enabled = false }
 })
 
 local HomeTab = Window:CreateTab({ Name = "🏠 Home" })
@@ -365,7 +374,7 @@ HomeTab:CreateButton({
     Callback = function()
         if setclipboard then
             setclipboard(game.JobId)
-            Rayfield:Notify({ Title = "Clipboard", Content = "Job ID copied to clipboard!", Duration = 2 })
+            SafeNotify({ Title = "Clipboard", Content = "Job ID copied to clipboard!", Duration = 2 })
         end
     end,
 })
@@ -600,7 +609,7 @@ MiscTab:CreateButton({
     Name = "💾 Save Config (Manual)",
     Callback = function()
         SaveConfigToFile()
-        Rayfield:Notify({
+        SafeNotify({
             Title = "Config Saved",
             Content = "Saved directly to workspace/" .. CONFIG_FILE,
             Duration = 3
@@ -612,7 +621,7 @@ MiscTab:CreateButton({
     Name = "📂 Reload Config File",
     Callback = function()
         LoadConfigFromFile()
-        Rayfield:Notify({
+        SafeNotify({
             Title = "Config Reloaded",
             Content = "Loaded settings from " .. CONFIG_FILE,
             Duration = 3
