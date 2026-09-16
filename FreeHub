@@ -14,7 +14,7 @@ local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
-local ASSET_ICON = "rbxassetid://107078844281790"
+local ASSET_ICON = "rbxassetid://132213994055596"
 
 local SelectedEggsLookup = {}
 local NestEggsLookup = {}
@@ -126,7 +126,7 @@ local function GetPlayerPlotCenter()
 end
 
 -- =================================================================
--- WINDOW & CUSTOM HIGH-CONTRAST THEME
+-- WINDOW & CUSTOM NEON CYAN / MAGENTA THEME (PURE WHITE TEXT)
 -- =================================================================
 local Window = Rayfield:CreateWindow({
     Name = "KissoHub",
@@ -137,32 +137,32 @@ local Window = Rayfield:CreateWindow({
     Icon = ASSET_ICON,
 
     Theme = {
-        WindowColor = ColorSequence.new(Color3.fromRGB(15, 18, 26), Color3.fromRGB(10, 12, 18)),
-        SurfaceStroke = Color3.fromRGB(0, 190, 255),
+        WindowColor = ColorSequence.new(Color3.fromRGB(15, 17, 26), Color3.fromRGB(10, 12, 18)),
+        SurfaceStroke = Color3.fromRGB(0, 200, 255),
         
         TitlingColor = Color3.fromRGB(255, 255, 255),
-        ContentColor = Color3.fromRGB(245, 248, 255),
+        ContentColor = Color3.fromRGB(255, 255, 255),
         ElementTextHoverColor = Color3.fromRGB(255, 255, 255),
-        ActionColor = Color3.fromRGB(0, 210, 255),
+        ActionColor = Color3.fromRGB(0, 200, 255),
 
-        TabColor = Color3.fromRGB(220, 230, 245),
-        TabBackground = ColorSequence.new(Color3.fromRGB(25, 32, 45), Color3.fromRGB(16, 20, 28)),
-        TabStroke = ColorSequence.new(Color3.fromRGB(0, 190, 255), Color3.fromRGB(0, 130, 220)),
+        TabColor = Color3.fromRGB(255, 255, 255),
+        TabBackground = ColorSequence.new(Color3.fromRGB(25, 20, 38), Color3.fromRGB(16, 14, 24)),
+        TabStroke = ColorSequence.new(Color3.fromRGB(0, 200, 255), Color3.fromRGB(190, 40, 220)),
 
-        ElementGradient = ColorSequence.new(Color3.fromRGB(22, 28, 38), Color3.fromRGB(15, 19, 26)),
-        ElementStroke = Color3.fromRGB(45, 55, 75),
-        ElementStrokeHover = Color3.fromRGB(0, 200, 255),
+        ElementGradient = ColorSequence.new(Color3.fromRGB(22, 20, 35), Color3.fromRGB(15, 14, 25)),
+        ElementStroke = Color3.fromRGB(60, 45, 90),
+        ElementStrokeHover = Color3.fromRGB(190, 40, 220),
         ElementTransparency = 0,
-        StatBackground = Color3.fromRGB(22, 28, 40),
+        StatBackground = Color3.fromRGB(20, 18, 30),
 
-        AccentColor = Color3.fromRGB(0, 200, 255),
-        AccentStroke = Color3.fromRGB(0, 140, 220),
-        ToggleTrack = Color3.fromRGB(35, 42, 56),
-        ToggleKnobOff = Color3.fromRGB(180, 190, 205),
+        AccentColor = Color3.fromRGB(190, 40, 220),
+        AccentStroke = Color3.fromRGB(0, 200, 255),
+        ToggleTrack = Color3.fromRGB(35, 30, 50),
+        ToggleKnobOff = Color3.fromRGB(200, 200, 220),
 
-        FieldBackground = Color3.fromRGB(25, 32, 44),
-        PlaceholderColor = Color3.fromRGB(160, 175, 195),
-        DropdownHighlight = Color3.fromRGB(0, 160, 240)
+        FieldBackground = Color3.fromRGB(25, 22, 38),
+        PlaceholderColor = Color3.fromRGB(255, 255, 255),
+        DropdownHighlight = Color3.fromRGB(190, 40, 220)
     },
 
     ToggleUIKeybind = "K",
@@ -175,12 +175,12 @@ local Window = Rayfield:CreateWindow({
 
 local StatusTag = Window:CreateTag({
     text = "v1.0.0",
-    color = Color3.fromRGB(0, 185, 255)
+    color = Color3.fromRGB(0, 200, 255)
 })
 
 local StateTag = Window:CreateTag({
     text = "IDLE",
-    color = Color3.fromRGB(160, 170, 185)
+    color = Color3.fromRGB(190, 40, 220)
 })
 
 local function SafeNotify(title, content, duration)
@@ -486,7 +486,7 @@ FarmTab:CreateToggle({
                 end
             end)
         else
-            StateTag:Set({ text = "IDLE", color = Color3.fromRGB(160, 170, 185) })
+            StateTag:Set({ text = "IDLE", color = Color3.fromRGB(190, 40, 220) })
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -710,7 +710,7 @@ MiscTab:CreateToggle({
 })
 
 -- =================================================================
--- CUSTOM TOP HUD UI CREATION (STYLIZED TELEPORT BAR)
+-- CUSTOM TOP HUD UI CREATION (MATCHED THEME COLORING)
 -- =================================================================
 local function BuildTopBarHUD()
     local parentGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -741,11 +741,11 @@ local function BuildTopBarHUD()
     UIListLayout.Parent = Container
 
     local buttonsData = {
-        { Text = "Egg Tracker 🥚", Target = "EggTracker", Color = Color3.fromRGB(46, 150, 70), Border = Color3.fromRGB(0, 200, 100) },
-        { Text = "Food 🥩", Target = "Food", Color = Color3.fromRGB(200, 50, 50), Border = Color3.fromRGB(255, 80, 80) },
-        { Text = "My Plot 🏡", Target = "MyPlot", Color = Color3.fromRGB(130, 85, 55), Border = Color3.fromRGB(180, 120, 80) },
-        { Text = "Gears ⚙️", Target = "Gears", Color = Color3.fromRGB(30, 120, 210), Border = Color3.fromRGB(0, 180, 255) },
-        { Text = "Sell 💰", Target = "Sell", Color = Color3.fromRGB(220, 160, 20), Border = Color3.fromRGB(255, 200, 40) }
+        { Text = "Egg Tracker 🥚", Target = "EggTracker", Color = Color3.fromRGB(20, 18, 30), Border = Color3.fromRGB(0, 200, 255) },
+        { Text = "Food 🥩", Target = "Food", Color = Color3.fromRGB(20, 18, 30), Border = Color3.fromRGB(190, 40, 220) },
+        { Text = "My Plot 🏡", Target = "MyPlot", Color = Color3.fromRGB(20, 18, 30), Border = Color3.fromRGB(0, 200, 255) },
+        { Text = "Gears ⚙️", Target = "Gears", Color = Color3.fromRGB(20, 18, 30), Border = Color3.fromRGB(190, 40, 220) },
+        { Text = "Sell 💰", Target = "Sell", Color = Color3.fromRGB(20, 18, 30), Border = Color3.fromRGB(0, 200, 255) }
     }
 
     for idx, data in ipairs(buttonsData) do
@@ -862,7 +862,8 @@ task.spawn(function()
                         if not ActiveHighlights[egg] then
                             local hl = Instance.new("Highlight")
                             hl.Adornee = egg
-                            hl.FillColor = Color3.fromRGB(255, 215, 0)
+                            hl.FillColor = Color3.fromRGB(0, 200, 255)
+                            hl.OutlineColor = Color3.fromRGB(190, 40, 220)
                             hl.Parent = egg
                             ActiveHighlights[egg] = hl
                         end
