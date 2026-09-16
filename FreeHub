@@ -286,7 +286,7 @@ local function InteractWithEgg(egg)
 end
 
 -- =================================================================
--- WINDOW & TABS CREATION (WITH NATIVE RAYFIELD SAVING)
+-- WINDOW & TABS CREATION (AUTO-LOAD HANDLED MANUALLY VIA DEFER)
 -- =================================================================
 local Window = Rayfield:CreateWindow({
     Name = "Egg Hub",
@@ -294,7 +294,7 @@ local Window = Rayfield:CreateWindow({
     LoadingSubtitle = "Rayfield Interface",
     configuration = {
         autoSave = true,
-        autoLoad = true,
+        autoLoad = false,
         fileName = "EggHubConfig",
         customFolder = "EggHub",
     }
@@ -812,5 +812,17 @@ task.spawn(function()
                 end
             end
         end
+    end
+end)
+
+-- =================================================================
+-- DEFERRED NATIVE CONFIGURATION LOAD
+-- =================================================================
+task.defer(function()
+    local success, err = pcall(function()
+        Window:Load()
+    end)
+    if not success then
+        warn("Rayfield Config Load Error: " .. tostring(err))
     end
 end)
