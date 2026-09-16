@@ -14,6 +14,8 @@ local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
+local ASSET_ICON = "rbxassetid://107078844281790"
+
 local SelectedEggsLookup = {}
 local NestEggsLookup = {}
 local FlySpeed = 400
@@ -21,6 +23,8 @@ local AutofarmEnabled = false
 local EggESPEnabled = false
 local AutoNestEnabled = false
 local AutoHatchEnabled = false
+local AutoSellPetsEnabled = false
+local AutoClaimPlotEnabled = true
 local InfZoomEnabled = false
 local FastModeEnabled = false
 local AntiAFKEnabled = false
@@ -28,6 +32,7 @@ local AntiAFKEnabled = false
 local ActiveHighlights = {}
 local NoclipConnection = nil
 local AntiAFKConnection = nil
+local OriginalLightingSettings = {}
 
 local SessionStartTime = os.time()
 local EggsGrabbedCount = 0
@@ -48,6 +53,12 @@ local ExtractedEggsList = {
     "Cherub Egg"
 }
 
+-- Save original lighting state for Fast Mode toggle restoration
+OriginalLightingSettings = {
+    GlobalShadows = Lighting.GlobalShadows,
+    FogEnd = Lighting.FogEnd
+}
+
 -- =================================================================
 -- WINDOW & CUSTOM HIGH-CONTRAST THEME
 -- =================================================================
@@ -57,35 +68,35 @@ local Window = Rayfield:CreateWindow({
     LoadingSubtitle = "Brought to you by Kisso",
     
     ShowText = "KissoHub",
-    Icon = 107078844281790,
+    Icon = ASSET_ICON,
 
     Theme = {
-        WindowColor = ColorSequence.new(Color3.fromRGB(15, 18, 24), Color3.fromRGB(10, 12, 16)),
-        SurfaceStroke = Color3.fromRGB(0, 180, 255),
+        WindowColor = ColorSequence.new(Color3.fromRGB(15, 18, 26), Color3.fromRGB(10, 12, 18)),
+        SurfaceStroke = Color3.fromRGB(0, 190, 255),
         
         TitlingColor = Color3.fromRGB(255, 255, 255),
-        ContentColor = Color3.fromRGB(235, 240, 245),
+        ContentColor = Color3.fromRGB(245, 248, 255),
         ElementTextHoverColor = Color3.fromRGB(255, 255, 255),
         ActionColor = Color3.fromRGB(0, 210, 255),
 
-        TabColor = Color3.fromRGB(210, 220, 230),
-        TabBackground = ColorSequence.new(Color3.fromRGB(26, 32, 44), Color3.fromRGB(18, 22, 30)),
-        TabStroke = ColorSequence.new(Color3.fromRGB(0, 180, 255), Color3.fromRGB(0, 120, 220)),
+        TabColor = Color3.fromRGB(220, 230, 245),
+        TabBackground = ColorSequence.new(Color3.fromRGB(25, 32, 45), Color3.fromRGB(16, 20, 28)),
+        TabStroke = ColorSequence.new(Color3.fromRGB(0, 190, 255), Color3.fromRGB(0, 130, 220)),
 
-        ElementGradient = ColorSequence.new(Color3.fromRGB(22, 27, 36), Color3.fromRGB(16, 20, 27)),
-        ElementStroke = Color3.fromRGB(40, 48, 62),
-        ElementStrokeHover = Color3.fromRGB(0, 180, 255),
+        ElementGradient = ColorSequence.new(Color3.fromRGB(22, 28, 38), Color3.fromRGB(15, 19, 26)),
+        ElementStroke = Color3.fromRGB(45, 55, 75),
+        ElementStrokeHover = Color3.fromRGB(0, 200, 255),
         ElementTransparency = 0,
-        StatBackground = Color3.fromRGB(24, 30, 42),
+        StatBackground = Color3.fromRGB(22, 28, 40),
 
-        AccentColor = Color3.fromRGB(0, 185, 255),
-        AccentStroke = Color3.fromRGB(0, 130, 210),
-        ToggleTrack = Color3.fromRGB(32, 38, 50),
-        ToggleKnobOff = Color3.fromRGB(170, 175, 185),
+        AccentColor = Color3.fromRGB(0, 200, 255),
+        AccentStroke = Color3.fromRGB(0, 140, 220),
+        ToggleTrack = Color3.fromRGB(35, 42, 56),
+        ToggleKnobOff = Color3.fromRGB(180, 190, 205),
 
-        FieldBackground = Color3.fromRGB(26, 32, 42),
-        PlaceholderColor = Color3.fromRGB(130, 140, 155),
-        DropdownHighlight = Color3.fromRGB(0, 140, 220)
+        FieldBackground = Color3.fromRGB(25, 32, 44),
+        PlaceholderColor = Color3.fromRGB(160, 175, 195),
+        DropdownHighlight = Color3.fromRGB(0, 160, 240)
     },
 
     ToggleUIKeybind = "K",
@@ -96,7 +107,6 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
--- Gen2 Header Tags
 local StatusTag = Window:CreateTag({
     text = "v1.0.0",
     color = Color3.fromRGB(0, 185, 255)
@@ -104,17 +114,16 @@ local StatusTag = Window:CreateTag({
 
 local StateTag = Window:CreateTag({
     text = "IDLE",
-    color = Color3.fromRGB(150, 150, 150)
+    color = Color3.fromRGB(160, 170, 185)
 })
 
--- Updated Notification Helper using Gen2 window:Notify and window:Toast
 local function SafeNotify(title, content, duration)
     pcall(function()
         Window:Notify({
             title = title or "KissoHub",
             content = content or "",
             duration = duration or 4,
-            icon = 107078844281790
+            icon = ASSET_ICON
         })
     end)
 end
@@ -125,13 +134,13 @@ local function QuickToast(title, subtitle)
             title = title,
             subtitle = subtitle,
             position = "Top",
-            icon = 107078844281790
+            icon = ASSET_ICON
         })
     end)
 end
 
 -- =================================================================
--- HELPER FUNCTIONS
+-- HELPER FUNCTIONS & LOGIC
 -- =================================================================
 local function GetPlayerCash()
     local cash = 0
@@ -183,9 +192,41 @@ local function GetPlayerPlot()
     return nil
 end
 
+local function AutoClaimPlot()
+    if GetPlayerPlot() then return end
+    if not Workspace:FindFirstChild("Plots") then return end
+
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local gameRemotes = remotes and remotes:FindFirstChild("Game")
+    local claimRemote = gameRemotes and gameRemotes:FindFirstChild("ClaimPlot")
+
+    for _, plot in ipairs(Workspace.Plots:GetChildren()) do
+        local data = plot:FindFirstChild("Data")
+        if data and data:FindFirstChild("Owner") and (data.Owner.Value == nil or data.Owner.Value == "" or data.Owner.Value == "None") then
+            if claimRemote then
+                claimRemote:FireServer(plot)
+                QuickToast("Plot Claimed", "Claimed an open plot automatically")
+            else
+                local claimPart = plot:FindFirstChild("Claim") or plot:FindFirstChild("TouchPart") or plot:FindFirstChildWhichIsA("BasePart", true)
+                local char = LocalPlayer.Character
+                if claimPart and char and char:FindFirstChild("HumanoidRootPart") then
+                    firetouchinterest(char.HumanoidRootPart, claimPart, 0)
+                    task.wait(0.1)
+                    firetouchinterest(char.HumanoidRootPart, claimPart, 1)
+                end
+            end
+            break
+        end
+    end
+end
+
 local function GetPlayerPlotCenter()
     local plot = GetPlayerPlot()
-    if not plot then return nil end
+    if not plot then 
+        AutoClaimPlot()
+        plot = GetPlayerPlot()
+        if not plot then return nil end
+    end
     
     local centerCFrame
     if plot:IsA("Model") then
@@ -208,7 +249,7 @@ local function TeleportToMyPlot()
             QuickToast("Teleported", "Moved to your plot")
         end
     else
-        SafeNotify("Teleport Error", "Could not find your plot!", 3)
+        SafeNotify("Teleport Error", "Could not find or claim a plot!", 3)
     end
 end
 
@@ -362,7 +403,7 @@ end
 -- =================================================================
 -- TABS & CONTROLS
 -- =================================================================
-local HomeTab = Window:CreateTab({ Name = "🏠 Home", Icon = 107078844281790 })
+local HomeTab = Window:CreateTab({ Name = "🏠 Home", Icon = ASSET_ICON })
 local FarmTab = Window:CreateTab({ Name = "⚡ Egg Automation" })
 local EggTab = Window:CreateTab({ Name = "🥚 Egg Management" })
 local MiscTab = Window:CreateTab({ Name = "🛠️ Misc" })
@@ -411,7 +452,7 @@ FarmTab:CreateToggle({
     Callback = function(Value)
         EggESPEnabled = Value
         if not Value then
-            for _, hl in pairs(ActiveHighlights) do
+            for egg, hl in pairs(ActiveHighlights) do
                 if hl then hl:Destroy() end
             end
             table.clear(ActiveHighlights)
@@ -443,7 +484,7 @@ FarmTab:CreateToggle({
         SetNoclip(Value)
         
         if Value then
-            StateTag:Set({ text = "FARMING", color = Color3.fromRGB(80, 200, 120) })
+            StateTag:Set({ text = "FARMING", color = Color3.fromRGB(0, 220, 130) })
             QuickToast("Autofarm Active", "Harvesting target eggs")
             task.spawn(function()
                 while AutofarmEnabled do
@@ -459,13 +500,15 @@ FarmTab:CreateToggle({
                                     break
                                 end
                             end
+                        else
+                            targetEgg = renderedFolder:GetChildren()[1]
                         end
 
                         if targetEgg and targetEgg.Parent then
                             local reached = FlyToTarget(targetEgg)
                             if reached and targetEgg.Parent and targetEgg:IsDescendantOf(Workspace) then
                                 InteractWithEgg(targetEgg)
-                                task.wait(1.30)
+                                task.wait(1.20)
                             end
                             if AutofarmEnabled then
                                 FlyToTarget(plotCenter)
@@ -477,7 +520,7 @@ FarmTab:CreateToggle({
                 end
             end)
         else
-            StateTag:Set({ text = "IDLE", color = Color3.fromRGB(150, 150, 150) })
+            StateTag:Set({ text = "IDLE", color = Color3.fromRGB(160, 170, 185) })
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -601,6 +644,30 @@ EggTab:CreateToggle({
     end,
 })
 
+EggTab:CreateToggle({
+    Name = "Auto Sell Pets",
+    Flag = "AutoSellPets",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoSellPetsEnabled = Value
+        if Value then
+            task.spawn(function()
+                while AutoSellPetsEnabled do
+                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                    local gameRemotes = remotes and remotes:FindFirstChild("Game")
+                    local sellRemote = gameRemotes and (gameRemotes:FindFirstChild("SellPets") or gameRemotes:FindFirstChild("Sell"))
+
+                    if sellRemote then
+                        sellRemote:FireServer()
+                        PetsSoldCount = PetsSoldCount + 1
+                    end
+                    task.wait(1.5)
+                end
+            end)
+        end
+    end,
+})
+
 -- Misc Tab
 MiscTab:CreateSection({ Name = "💾 Settings Management" })
 MiscTab:CreateButton({
@@ -629,6 +696,16 @@ MiscTab:CreateButton({ Name = "💰 TP Sell Stall", Callback = function() Telepo
 
 MiscTab:CreateDivider({ text = "preferences" })
 MiscTab:CreateSection({ Name = "⚙️ Player Options" })
+
+MiscTab:CreateToggle({
+    Name = "Auto Claim Open Plot",
+    Flag = "AutoClaimPlot",
+    CurrentValue = true,
+    Callback = function(Value)
+        AutoClaimPlotEnabled = Value
+        if Value then AutoClaimPlot() end
+    end,
+})
 
 MiscTab:CreateToggle({
     Name = "Infinite Zoom",
@@ -675,13 +752,127 @@ MiscTab:CreateToggle({
         if Value then
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
+
+            local terrain = Workspace:FindFirstChildOfClass("Terrain")
+            if terrain then
+                terrain.WaterWaveSize = 0
+                terrain.WaterWaveSpeed = 0
+                terrain.WaterReflectance = 0
+                terrain.WaterTransparency = 0
+            end
+
+            for _, v in ipairs(game:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                elseif v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("PostEffect") then
+                    v.Enabled = false
+                end
+            end
             QuickToast("FPS Boost", "Graphics optimized")
+        else
+            Lighting.GlobalShadows = OriginalLightingSettings.GlobalShadows
+            Lighting.FogEnd = OriginalLightingSettings.FogEnd
+            QuickToast("Graphics Restored", "Standard settings restored")
         end
     end,
 })
 
 -- =================================================================
--- LIVE REFRESH LOOP
+-- CUSTOM TOP HUD UI CREATION (STYLIZED TELEPORT BAR)
+-- =================================================================
+local function BuildTopBarHUD()
+    local parentGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    if parentGui:FindFirstChild("StallTeleportBar") then
+        parentGui.StallTeleportBar:Destroy()
+    end
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "StallTeleportBar"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.DisplayOrder = -10
+    ScreenGui.Parent = parentGui
+
+    local Container = Instance.new("Frame")
+    Container.Name = "Container"
+    Container.Size = UDim2.new(0, 620, 0, 42)
+    Container.Position = UDim2.new(0.5, 0, 0, 12)
+    Container.AnchorPoint = Vector2.new(0.5, 0)
+    Container.BackgroundTransparency = 1
+    Container.Parent = ScreenGui
+
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+    UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Padding = UDim.new(0, 8)
+    UIListLayout.Parent = Container
+
+    local buttonsData = {
+        { Text = "Egg Tracker 🥚", Target = "EggTracker", Color = Color3.fromRGB(46, 150, 70), Border = Color3.fromRGB(0, 200, 100) },
+        { Text = "Food 🥩", Target = "Food", Color = Color3.fromRGB(200, 50, 50), Border = Color3.fromRGB(255, 80, 80) },
+        { Text = "My Plot 🏡", Target = "MyPlot", Color = Color3.fromRGB(130, 85, 55), Border = Color3.fromRGB(180, 120, 80) },
+        { Text = "Gears ⚙️", Target = "Gears", Color = Color3.fromRGB(30, 120, 210), Border = Color3.fromRGB(0, 180, 255) },
+        { Text = "Sell 💰", Target = "Sell", Color = Color3.fromRGB(220, 160, 20), Border = Color3.fromRGB(255, 200, 40) }
+    }
+
+    for idx, data in ipairs(buttonsData) do
+        local btn = Instance.new("TextButton")
+        btn.Name = data.Target .. "Button"
+        btn.Size = UDim2.new(0, 115, 1, 0)
+        btn.BackgroundColor3 = data.Color
+        btn.Text = data.Text
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.FredokaOne
+        btn.TextSize = 14
+        btn.TextStrokeTransparency = 0.5
+        btn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        btn.LayoutOrder = idx
+        btn.Parent = Container
+
+        local uiCorner = Instance.new("UICorner")
+        uiCorner.CornerRadius = UDim.new(0, 8)
+        uiCorner.Parent = btn
+
+        local uiStroke = Instance.new("UIStroke")
+        uiStroke.Color = data.Border
+        uiStroke.Thickness = 2
+        uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        uiStroke.Parent = btn
+
+        btn.MouseEnter:Connect(function()
+            btn.Size = UDim2.new(0, 117, 1, 2)
+        end)
+        btn.MouseLeave:Connect(function()
+            btn.Size = UDim2.new(0, 115, 1, 0)
+        end)
+        btn.MouseButton1Click:Connect(function()
+            if data.Target == "MyPlot" then
+                TeleportToMyPlot()
+            else
+                TeleportToStall(data.Target)
+            end
+        end)
+    end
+end
+
+BuildTopBarHUD()
+
+MiscTab:CreateToggle({
+    Name = "Show Top Teleport Bar",
+    Flag = "ShowTopBar",
+    CurrentValue = true,
+    Callback = function(Value)
+        local parentGui = LocalPlayer:FindFirstChild("PlayerGui")
+        local bar = parentGui and parentGui:FindFirstChild("StallTeleportBar")
+        if bar then
+            bar.Enabled = Value
+        end
+    end,
+})
+
+-- =================================================================
+-- LIVE REFRESH & ESP LOOPS
 -- =================================================================
 task.spawn(function()
     PreviousCash = GetPlayerCash()
@@ -689,42 +880,64 @@ task.spawn(function()
 
     while task.wait(0.5) do
         pcall(function()
-            local elapsedMinutes = math.floor((os.time() - SessionStartTime) / 60)
-            local activeFeatures = (AutofarmEnabled and 1 or 0) + (EggESPEnabled and 1 or 0) + (AutoNestEnabled and 1 or 0) + (AutoHatchEnabled and 1 or 0) + (InfZoomEnabled and 1 or 0) + (AntiAFKEnabled and 1 or 0) + (FastModeEnabled and 1 or 0)
-            local fps = math.floor(Workspace:GetRealPhysicsFPS())
-            local ping = GetPing()
-            local playerCount = #Players:GetPlayers()
-
-            local currentCash = GetPlayerCash()
-            local directIncome = GetPlayerIncome()
-
-            if directIncome then
-                CashPerSecond = directIncome
-            else
-                local now = os.clock()
-                local timeDiff = now - LastCashCheckTime
-                if timeDiff >= 1 then
-                    CashPerSecond = math.max(0, math.floor((currentCash - PreviousCash) / timeDiff))
-                    PreviousCash = currentCash
-                    LastCashCheckTime = now
-                end
+            if AutoClaimPlotEnabled and not GetPlayerPlot() then
+                AutoClaimPlot()
             end
 
-            SessionStat:Set(elapsedMinutes)
-            FeaturesStat:Set(activeFeatures)
-            FpsStat:Set(fps)
-            PingStat:Set(ping)
-            PlayersStat:Set(playerCount)
+            local elapsedMinutes = math.floor((os.time() - SessionStartTime) / 60)
+            local activeFeatures = (AutofarmEnabled and 1 or 0) 
+                + (EggESPEnabled and 1 or 0) 
+                + (AutoNestEnabled and 1 or 0) 
+                + (AutoHatchEnabled and 1 or 0) 
+                + (AutoSellPetsEnabled and 1 or 0) 
+                + (InfZoomEnabled and 1 or 0) 
+                + (FastModeEnabled and 1 or 0) 
+                + (AntiAFKEnabled and 1 or 0)
+
+            local currentCash = GetPlayerCash()
+            local now = os.clock()
+            local dt = now - LastCashCheckTime
+            if dt >= 1 then
+                CashPerSecond = math.max(0, math.floor((currentCash - PreviousCash) / dt))
+                PreviousCash = currentCash
+                LastCashCheckTime = now
+            end
 
             CashStat:Set(currentCash)
             CpsStat:Set(CashPerSecond)
             GrabbedStat:Set(EggsGrabbedCount)
             HatchedStat:Set(EggsHatchedCount)
             SoldStat:Set(PetsSoldCount)
+
+            SessionStat:Set(elapsedMinutes)
+            FeaturesStat:Set(activeFeatures)
+            FpsStat:Set(math.floor(workspace:GetRealPhysicsFPS() or 60))
+            PingStat:Set(GetPing())
+            PlayersStat:Set(#Players:GetPlayers())
         end)
     end
 end)
 
--- Initial Startup Toast & Notification
-QuickToast("KissoHub", "Loaded successfully")
-SafeNotify("Welcome", "KissoHub v1.0.0 is ready to use.", 4)
+-- ESP Highlight Loop
+task.spawn(function()
+    while task.wait(1) do
+        if EggESPEnabled then
+            pcall(function()
+                local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
+                if renderedFolder then
+                    for _, egg in ipairs(renderedFolder:GetChildren()) do
+                        if (next(SelectedEggsLookup) == nil or SelectedEggsLookup[egg.Name]) and not ActiveHighlights[egg] then
+                            local hl = Instance.new("Highlight")
+                            hl.Name = "EggESP"
+                            hl.FillColor = Color3.fromRGB(0, 255, 150)
+                            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                            hl.FillTransparency = 0.5
+                            hl.Parent = egg
+                            ActiveHighlights[egg] = hl
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
