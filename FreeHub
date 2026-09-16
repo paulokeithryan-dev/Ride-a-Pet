@@ -11,6 +11,11 @@ local Window = Rayfield:CreateWindow({
 })
 
 -- Tabs Setup
+local HomeTab = Window:CreateTab({
+    Name = "Home",
+    Icon = 4483362458
+})
+
 local FarmTab = Window:CreateTab({
     Name = "Egg Automation",
     Icon = 4483362458
@@ -36,6 +41,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local StatsService = game:GetService("Stats")
 local LocalPlayer = Players.LocalPlayer
 
 local SelectedEggsLookup = {}
@@ -47,6 +53,46 @@ local AutoNestEnabled = false
 local AutoHatchEnabled = false
 local ActiveHighlights = {}
 local NoclipConnection = nil
+
+-- Session & Performance Counters
+local SessionStartTime = os.time()
+local EggsGrabbedCount = 0
+local EggsPlacedCount = 0
+local EggsHatchedCount = 0
+
+-- UI Elements for Live Home Display
+HomeTab:CreateSection("Session Status")
+local StatusParagraph = HomeTab:CreateParagraph({
+    Title = "Status",
+    Content = "Loading session status..."
+})
+
+HomeTab:CreateSection("Server Information")
+local ServerParagraph = HomeTab:CreateParagraph({
+    Title = "Server Details",
+    Content = "Loading server details..."
+})
+
+HomeTab:CreateButton({
+    Name = "Copy Job ID (Server ID)",
+    Callback = function()
+        if setclipboard then
+            setclipboard(game.JobId)
+            Rayfield:Notify({
+                Title = "Clipboard",
+                Content = "Job ID copied to clipboard!",
+                Duration = 2,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+HomeTab:CreateSection("Farm Statistics")
+local StatsParagraph = HomeTab:CreateParagraph({
+    Title = "Stats",
+    Content = "Loading farm statistics..."
+})
 
 -- Noclip Handler
 local function SetNoclip(enabled)
@@ -195,6 +241,7 @@ local function InteractWithEgg(egg)
             task.wait(0.05)
             prompt:InputHoldEnd()
         end
+        EggsGrabbedCount = EggsGrabbedCount + 1
     end
 end
 
@@ -341,6 +388,7 @@ EggTab:CreateToggle({
                                     eggPlaced:FireServer({
                                         NestId = tostring(nestId)
                                     })
+                                    EggsPlacedCount = EggsPlacedCount + 1
                                     task.wait(0.1)
                                 end
                             end
@@ -377,6 +425,7 @@ EggTab:CreateToggle({
                                     hatchRemote:FireServer({
                                         EggKey = tostring(eggKey)
                                     })
+                                    EggsHatchedCount = EggsHatchedCount + 1
                                     task.wait(0.1)
                                 end
                             end
@@ -388,6 +437,39 @@ EggTab:CreateToggle({
         end
     end,
 })
+
+-- Live Dashboard Update Loop
+task.spawn(function()
+    while task.wait(0.5) do
+        -- Calculate Session Time
+        local elapsed = os.time() - SessionStartTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        local sessionStr = string.format("%dh %dm %ds", hours, mins, secs)
+
+        -- Calculate FPS & Ping
+        local ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
+        local fps = math.floor(Workspace:GetRealPhysicsFPS())
+        local activeFeatures = (AutofarmEnabled and 1 or 0) + (EggESPEnabled and 1 or 0) + (AutoNestEnabled and 1 or 0) + (AutoHatchEnabled and 1 or 0)
+
+        -- Update Home Tab Paragraphs
+        StatusParagraph:Set({
+            Title = "Status Overview",
+            Content = string.format("⏱️ Session Time: %s\n⚡ Features On: %d\n🎯 FPS: %d\n📶 Ping: %d ms", sessionStr, activeFeatures, fps, ping)
+        })
+
+        ServerParagraph:Set({
+            Title = "Server Details",
+            Content = string.format("🎮 Place ID: %d\n🔑 Job ID: %s\n👥 Players: %d / %d", game.PlaceId, game.JobId ~= "" and game.JobId or "Solo / Studio", #Players:GetPlayers(), Players.MaxPlayers)
+        })
+
+        StatsParagraph:Set({
+            Title = "Session Statistics",
+            Content = string.format("🥚 Eggs Grabbed: %d\n🪹 Eggs Placed: %d\n🐣 Eggs Hatched: %d", EggsGrabbedCount, EggsPlacedCount, EggsHatchedCount)
+        })
+    end
+end)
 
 -- ESP Updater Loop
 task.spawn(function()
@@ -409,5 +491,5 @@ task.spawn(function()
     end
 end)
 
--- Load Saved Configuration on Script Startup
+-- Load Saved Configuration on Startup
 Rayfield:LoadConfiguration()
