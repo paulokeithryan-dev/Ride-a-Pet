@@ -6,9 +6,12 @@ local function SafeNotify(data)
     pcall(function()
         if type(Rayfield) == "table" then
             if typeof(Rayfield.Notify) == "function" then
+                if not data.Image then
+                    data.Image = 107078844281790
+                end
                 Rayfield:Notify(data)
             elseif data and data.Title and data.Content then
-                print("[Egg Hub Notification] " .. data.Title .. ": " .. data.Content)
+                print("[KissoHub Notification] " .. data.Title .. ": " .. data.Content)
             end
         end
     end)
@@ -286,21 +289,36 @@ local function InteractWithEgg(egg)
 end
 
 -- =================================================================
--- WINDOW & TABS CREATION
+-- WINDOW & TABS CREATION (KISSO HUB CUSTOMIZED)
 -- =================================================================
 local Window = Rayfield:CreateWindow({
-    Name = "Egg Hub",
-    LoadingTitle = "Egg Hub Interface",
-    LoadingSubtitle = "Rayfield Interface",
-    configuration = {
-        autoSave = true,
-        autoLoad = false,
-        fileName = "EggHubConfig",
-        customFolder = "EggHub",
+    Name = "KissoHub | v1.0.0",
+    LoadingTitle = "KissoHub is Loading...",
+    LoadingSubtitle = "Brought to you by Kisso",
+    ShowText = "KissoHub",
+
+    Theme = {
+        WindowColor = Color3.fromRGB(18, 20, 26),     -- Dark Slate Base
+        ContentColor = Color3.fromRGB(28, 32, 42),    -- Panel Background
+        TitlingColor = Color3.fromRGB(255, 255, 255),  -- White Text
+        ActionColor = Color3.fromRGB(0, 188, 255),    -- Electric Cyan Accent
+    },
+
+    ToggleUIKeybind = "K",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "KissoHubFolder",
+        FileName = "UserPreferences"
+    },
+
+    Discord = {
+        Enabled = false,
+        Invite = "yourdiscordinvitecode",
+        RememberJoins = true
     }
 })
 
-local HomeTab = Window:CreateTab({ Name = "🏠 Home" })
+local HomeTab = Window:CreateTab({ Name = "🏠 Home", Icon = 107078844281790 })
 local FarmTab = Window:CreateTab({ Name = "⚡ Egg Automation" })
 local EggTab = Window:CreateTab({ Name = "🥚 Egg Management" })
 local MiscTab = Window:CreateTab({ Name = "🛠️ Misc" })
@@ -379,7 +397,6 @@ local FlySpeedSlider = FarmTab:CreateSlider({
     end,
 })
 
--- Added explicit divider to split visual config from core loop
 FarmTab:CreateDivider({ text = "execution" })
 
 FarmTab:CreateSection({ Name = "🌾 Farm Controls" })
@@ -481,7 +498,6 @@ local NestEggsDropdown = EggTab:CreateDropdown({
     end,
 })
 
--- Clean spacer divider between nest filters and active handlers
 EggTab:CreateDivider({ line = false, spacing = 16 })
 
 EggTab:CreateSection({ Name = "🔄 Automation Loops" })
@@ -567,7 +583,7 @@ MiscTab:CreateButton({
         Window:Save()
         SafeNotify({
             Title = "Config Saved",
-            Content = "Saved using Rayfield native system.",
+            Content = "Saved using KissoHub native system.",
             Duration = 3
         })
     end,
@@ -579,7 +595,7 @@ MiscTab:CreateButton({
         Window:Load()
         SafeNotify({
             Title = "Config Reloaded",
-            Content = "Loaded settings using Rayfield native system.",
+            Content = "Loaded settings using KissoHub native system.",
             Duration = 3
         })
     end,
@@ -821,7 +837,7 @@ task.spawn(function()
                     if not ActiveHighlights[egg] then
                         local hl = Instance.new("Highlight")
                         hl.Adornee = egg
-                        hl.FillColor = Color3.fromRGB(255, 215, 0)
+                        hl.FillColor = Color3.fromRGB(0, 188, 255)
                         hl.Parent = egg
                         ActiveHighlights[egg] = hl
                     end
@@ -831,6 +847,14 @@ task.spawn(function()
     end
 end)
 
+-- Initial Startup Notification
+SafeNotify({
+    Title = "KissoHub Loaded",
+    Content = "Successfully initialized. Enjoy the script!",
+    Duration = 4,
+    Image = 107078844281790
+})
+
 -- =================================================================
 -- DEFERRED NATIVE CONFIGURATION LOAD
 -- =================================================================
@@ -839,6 +863,6 @@ task.defer(function()
         Window:Load()
     end)
     if not success then
-        warn("Rayfield Config Load Error: " .. tostring(err))
+        warn("KissoHub Config Load Error: " .. tostring(err))
     end
 end)
