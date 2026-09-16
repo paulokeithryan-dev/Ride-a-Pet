@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
--- Robust notification helper that prevents any crashing
+-- Robust notification helper
 local function SafeNotify(data)
     pcall(function()
         if type(Rayfield) == "table" then
@@ -13,54 +13,6 @@ local function SafeNotify(data)
         end
     end)
 end
-
--- =================================================================
--- CUSTOM JSON CONFIG MANAGER
--- =================================================================
-local CONFIG_FILE = "EggHubConfig.json"
-
-local ConfigData = {
-    FlySpeed = 400,
-    EggESP = false,
-    AutofarmEgg = false,
-    AutoPutEgg = false,
-    AutoHatchEgg = false,
-    InfZoom = false,
-    AntiAFK = false,
-    FastMode = false,
-    ShowTopBar = true,
-    SelectedEggs = {},
-    NestEggs = {}
-}
-
-local function SaveConfigToFile()
-    if writefile then
-        local success, err = pcall(function()
-            local json = HttpService:JSONEncode(ConfigData)
-            writefile(CONFIG_FILE, json)
-        end)
-        if not success then
-            warn("Failed to save config:", err)
-        end
-    end
-end
-
-local function LoadConfigFromFile()
-    if readfile and isfile and isfile(CONFIG_FILE) then
-        local success, result = pcall(function()
-            local json = readfile(CONFIG_FILE)
-            return HttpService:JSONDecode(json)
-        end)
-        if success and type(result) == "table" then
-            for k, v in pairs(result) do
-                ConfigData[k] = v
-            end
-        end
-    end
-end
-
--- Pre-load settings from JSON before initializing UI
-LoadConfigFromFile()
 
 -- =================================================================
 -- SERVICES & UTILITIES
@@ -77,7 +29,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local SelectedEggsLookup = {}
 local NestEggsLookup = {}
-local FlySpeed = ConfigData.FlySpeed
+local FlySpeed = 400
 local AutofarmEnabled = false
 local EggESPEnabled = false
 local AutoNestEnabled = false
@@ -108,10 +60,6 @@ local ExtractedEggsList = {
     "Sinister Egg", "Soul Egg", "Aurora Egg", "Galaxy Egg", "Blackhole Egg",
     "Cherub Egg"
 }
-
--- Populate initial lookups from config
-for _, egg in ipairs(ConfigData.SelectedEggs or {}) do SelectedEggsLookup[egg] = true end
-for _, egg in ipairs(ConfigData.NestEggs or {}) do NestEggsLookup[egg] = true end
 
 local function GetPlayerCash()
     local cash = 0
@@ -338,13 +286,18 @@ local function InteractWithEgg(egg)
 end
 
 -- =================================================================
--- WINDOW & TABS CREATION
+-- WINDOW & TABS CREATION (WITH NATIVE RAYFIELD SAVING)
 -- =================================================================
 local Window = Rayfield:CreateWindow({
     Name = "Egg Hub",
     LoadingTitle = "Egg Hub Interface",
     LoadingSubtitle = "Rayfield Interface",
-    ConfigurationSaving = { Enabled = false }
+    configuration = {
+        autoSave = true,
+        autoLoad = true,
+        fileName = "EggHubConfig",
+        customFolder = "EggHub",
+    }
 })
 
 local HomeTab = Window:CreateTab({ Name = "🏠 Home" })
@@ -397,11 +350,10 @@ FarmTab:CreateSection({ Name = "👁️ Visuals & Movement" })
 
 local EggESPToggle = FarmTab:CreateToggle({
     Name = "Egg ESP",
-    CurrentValue = ConfigData.EggESP,
+    Flag = "EggESP",
+    CurrentValue = false,
     Callback = function(Value)
         EggESPEnabled = Value
-        ConfigData.EggESP = Value
-        SaveConfigToFile()
         if not Value then
             for _, hl in pairs(ActiveHighlights) do
                 if hl then hl:Destroy() end
@@ -413,14 +365,13 @@ local EggESPToggle = FarmTab:CreateToggle({
 
 local FlySpeedSlider = FarmTab:CreateSlider({
     Name = "Autofarm Fly Speed",
+    Flag = "FlySpeed",
     Range = {100, 3000},
     Increment = 50,
     Suffix = " studs/sec",
-    CurrentValue = ConfigData.FlySpeed,
+    CurrentValue = 400,
     Callback = function(Value)
         FlySpeed = Value
-        ConfigData.FlySpeed = Value
-        SaveConfigToFile()
     end,
 })
 
@@ -428,11 +379,10 @@ FarmTab:CreateSection({ Name = "🌾 Farm Controls" })
 
 local AutofarmToggle = FarmTab:CreateToggle({
     Name = "Autofarm Egg",
-    CurrentValue = ConfigData.AutofarmEgg,
+    Flag = "AutofarmEgg",
+    CurrentValue = false,
     Callback = function(Value)
         AutofarmEnabled = Value
-        ConfigData.AutofarmEgg = Value
-        SaveConfigToFile()
         SetNoclip(Value)
         
         if Value then
@@ -481,24 +431,21 @@ local AutofarmToggle = FarmTab:CreateToggle({
 
 local TargetEggsDropdown = FarmTab:CreateDropdown({
     Name = "Select Target Eggs",
+    Flag = "SelectedEggs",
     Options = ExtractedEggsList,
-    CurrentOption = ConfigData.SelectedEggs,
+    CurrentOption = {},
     MultipleOptions = true,
     Callback = function(Options)
         table.clear(SelectedEggsLookup)
-        ConfigData.SelectedEggs = {}
         if type(Options) == "table" then
             for k, v in pairs(Options) do
                 if type(k) == "number" then
                     SelectedEggsLookup[v] = true
-                    table.insert(ConfigData.SelectedEggs, v)
                 elseif type(k) == "string" and (v == true or v == k) then
                     SelectedEggsLookup[k] = true
-                    table.insert(ConfigData.SelectedEggs, k)
                 end
             end
         end
-        SaveConfigToFile()
     end,
 })
 
@@ -509,24 +456,21 @@ EggTab:CreateSection({ Name = "🪹 Nest Configuration" })
 
 local NestEggsDropdown = EggTab:CreateDropdown({
     Name = "Select Eggs for Nest",
+    Flag = "NestEggs",
     Options = ExtractedEggsList,
-    CurrentOption = ConfigData.NestEggs,
+    CurrentOption = {},
     MultipleOptions = true,
     Callback = function(Options)
         table.clear(NestEggsLookup)
-        ConfigData.NestEggs = {}
         if type(Options) == "table" then
             for k, v in pairs(Options) do
                 if type(k) == "number" then
                     NestEggsLookup[v] = true
-                    table.insert(ConfigData.NestEggs, v)
                 elseif type(k) == "string" and (v == true or v == k) then
                     NestEggsLookup[k] = true
-                    table.insert(ConfigData.NestEggs, k)
                 end
             end
         end
-        SaveConfigToFile()
     end,
 })
 
@@ -534,11 +478,10 @@ EggTab:CreateSection({ Name = "🔄 Automation Loops" })
 
 local AutoPutToggle = EggTab:CreateToggle({
     Name = "Auto Put Egg to Nest",
-    CurrentValue = ConfigData.AutoPutEgg,
+    Flag = "AutoPutEgg",
+    CurrentValue = false,
     Callback = function(Value)
         AutoNestEnabled = Value
-        ConfigData.AutoPutEgg = Value
-        SaveConfigToFile()
         if Value then
             task.spawn(function()
                 while AutoNestEnabled do
@@ -570,11 +513,10 @@ local AutoPutToggle = EggTab:CreateToggle({
 
 local AutoHatchToggle = EggTab:CreateToggle({
     Name = "Auto Hatch Egg",
-    CurrentValue = ConfigData.AutoHatchEgg,
+    Flag = "AutoHatchEgg",
+    CurrentValue = false,
     Callback = function(Value)
         AutoHatchEnabled = Value
-        ConfigData.AutoHatchEgg = Value
-        SaveConfigToFile()
         if Value then
             task.spawn(function()
                 while AutoHatchEnabled do
@@ -612,10 +554,10 @@ MiscTab:CreateSection({ Name = "💾 Settings Management" })
 MiscTab:CreateButton({
     Name = "💾 Save Config (Manual)",
     Callback = function()
-        SaveConfigToFile()
+        Window:Save()
         SafeNotify({
             Title = "Config Saved",
-            Content = "Saved directly to workspace/" .. CONFIG_FILE,
+            Content = "Saved using Rayfield native system.",
             Duration = 3
         })
     end,
@@ -624,10 +566,10 @@ MiscTab:CreateButton({
 MiscTab:CreateButton({
     Name = "📂 Reload Config File",
     Callback = function()
-        LoadConfigFromFile()
+        Window:Load()
         SafeNotify({
             Title = "Config Reloaded",
-            Content = "Loaded settings from " .. CONFIG_FILE,
+            Content = "Loaded settings using Rayfield native system.",
             Duration = 3
         })
     end,
@@ -645,11 +587,10 @@ MiscTab:CreateSection({ Name = "⚙️ Player Options" })
 
 local InfZoomToggle = MiscTab:CreateToggle({
     Name = "Infinite Zoom",
-    CurrentValue = ConfigData.InfZoom,
+    Flag = "InfZoom",
+    CurrentValue = false,
     Callback = function(Value)
         InfZoomEnabled = Value
-        ConfigData.InfZoom = Value
-        SaveConfigToFile()
         if Value then
             LocalPlayer.CameraMaxZoomDistance = 100000
         else
@@ -660,11 +601,10 @@ local InfZoomToggle = MiscTab:CreateToggle({
 
 local AntiAFKToggle = MiscTab:CreateToggle({
     Name = "Anti-AFK",
-    CurrentValue = ConfigData.AntiAFK,
+    Flag = "AntiAFK",
+    CurrentValue = false,
     Callback = function(Value)
         AntiAFKEnabled = Value
-        ConfigData.AntiAFK = Value
-        SaveConfigToFile()
         if Value then
             if not AntiAFKConnection then
                 AntiAFKConnection = LocalPlayer.Idled:Connect(function()
@@ -686,11 +626,10 @@ MiscTab:CreateSection({ Name = "🚀 Optimization" })
 
 local FastModeToggle = MiscTab:CreateToggle({
     Name = "Fast Mode (FPS Booster)",
-    CurrentValue = ConfigData.FastMode,
+    Flag = "FastMode",
+    CurrentValue = false,
     Callback = function(Value)
         FastModeEnabled = Value
-        ConfigData.FastMode = Value
-        SaveConfigToFile()
         if Value then
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
@@ -797,10 +736,9 @@ BuildTopBarHUD()
 
 local ShowTopBarToggle = MiscTab:CreateToggle({
     Name = "Show Top Teleport Bar",
-    CurrentValue = ConfigData.ShowTopBar,
+    Flag = "ShowTopBar",
+    CurrentValue = true,
     Callback = function(Value)
-        ConfigData.ShowTopBar = Value
-        SaveConfigToFile()
         local parentGui = LocalPlayer:FindFirstChild("PlayerGui")
         local bar = parentGui and parentGui:FindFirstChild("StallTeleportBar")
         if bar then
