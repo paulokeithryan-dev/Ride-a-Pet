@@ -8,25 +8,57 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
--- Fixed: Passed as a table dictionary
-local Tab = Window:CreateTab({
+-- Tabs Setup
+local FarmTab = Window:CreateTab({
     Name = "Egg Automation",
+    Icon = 4483362458
+})
+
+local EggTab = Window:CreateTab({
+    Name = "Egg",
     Icon = 4483362458
 })
 
 -- Services & State Variables
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
-local SelectedEggs = {}
-local GlideSpeed = 50
+local SelectedEggsLookup = {}
+local FlySpeed = 400
 local AutofarmEnabled = false
 local EggESPEnabled = false
+local AutoNestEnabled = false
+local AutoHatchEnabled = false
 local ActiveHighlights = {}
+local NoclipConnection = nil
 
--- Plot Verification Helper
+-- Noclip Handler
+local function SetNoclip(enabled)
+    if enabled then
+        if not NoclipConnection then
+            NoclipConnection = RunService.Stepped:Connect(function()
+                local char = LocalPlayer.Character
+                if char then
+                    for _, part in ipairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        end
+    else
+        if NoclipConnection then
+            NoclipConnection:Disconnect()
+            NoclipConnection = nil
+        end
+    end
+end
+
+-- Plot Resolver
 local function GetPlayerPlot()
     if not Workspace:FindFirstChild("Plots") then return nil end
     for _, plot in ipairs(Workspace.Plots:GetChildren()) do
@@ -41,27 +73,92 @@ local function GetPlayerPlot()
     return nil
 end
 
--- Glide Movement Helper
-local function GlideTo(targetPosition)
+local function GetPlayerPlotCenter()
+    local plot = GetPlayerPlot()
+    if not plot then return nil end
+    
+    local centerCFrame
+    if plot:IsA("Model") then
+        centerCFrame = plot:GetPivot()
+    elseif plot:IsA("BasePart") then
+        centerCFrame = plot.CFrame
+    else
+        local base = plot:FindFirstChild("Base") or plot:FindFirstChild("Baseplate") or plot:FindFirstChildWhichIsA("BasePart")
+        centerCFrame = base and base.CFrame or CFrame.new()
+    end
+    return centerCFrame.Position + Vector3.new(0, 4, 0)
+end
+
+-- Nest Free Check
+local function IsNestFree(nest)
+    if not nest then return false end
+    if nest:GetAttribute("Occupied") == true or nest:GetAttribute("HasEgg") == true then
+        return false
+    end
+    for _, child in ipairs(nest:GetChildren()) do
+        if child:GetAttribute("EggKey") or child.Name:lower():find("egg") then
+            return false
+        end
+    end
+    return true
+end
+
+-- Realtime-Validated Flight Helper
+local function FlyToTarget(target)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
     local hrp = char.HumanoidRootPart
 
     while AutofarmEnabled and char and hrp do
-        local currentPos = hrp.Position
-        local distance = (targetPosition - currentPos).Magnitude
-        
-        if distance <= 5 then break end
+        if typeof(target) == "Instance" then
+            if not (target.Parent and target:IsDescendantOf(Workspace)) then
+                return false
+            end
+        end
 
-        local direction = (targetPosition - currentPos).Unit
+        local targetPos = typeof(target) == "Vector3" and target or (target:IsA("Model") and target:GetPivot().Position or target.Position)
+        local currentPos = hrp.Position
+        local distance = (targetPos - currentPos).Magnitude
+        
+        if distance <= 4 then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            return true
+        end
+
+        local direction = (targetPos - currentPos).Unit
         local dt = RunService.Heartbeat:Wait()
-        hrp.CFrame = CFrame.new(hrp.Position + (direction * (GlideSpeed * dt)), targetPosition)
+        
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        local moveStep = direction * (FlySpeed * dt)
+        
+        if moveStep.Magnitude > distance then
+            hrp.CFrame = CFrame.new(targetPos, targetPos + direction)
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            return true
+        else
+            hrp.CFrame = CFrame.new(currentPos + moveStep, currentPos + moveStep + direction)
+        end
     end
-    return AutofarmEnabled
+    return false
 end
 
--- 1. Egg ESP Toggle
-Tab:CreateToggle({
+-- Instant Proximity Prompt Trigger
+local function InteractWithEgg(egg)
+    if not (egg and egg.Parent and egg:IsDescendantOf(Workspace)) then return end
+    local prompt = egg:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        if fireproximityprompt then
+            fireproximityprompt(prompt)
+        else
+            prompt:InputHoldBegin()
+            task.wait(0.05)
+            prompt:InputHoldEnd()
+        end
+    end
+end
+
+-- TAB 1: EGG AUTOMATION
+FarmTab:CreateToggle({
     Name = "Egg ESP",
     CurrentValue = false,
     Flag = "EggESP",
@@ -76,67 +173,165 @@ Tab:CreateToggle({
     end,
 })
 
--- 2. Autofarm Egg Toggle
-Tab:CreateToggle({
+FarmTab:CreateToggle({
     Name = "Autofarm Egg",
     CurrentValue = false,
     Flag = "AutofarmEgg",
     Callback = function(Value)
         AutofarmEnabled = Value
+        SetNoclip(Value)
+        
         if Value then
             task.spawn(function()
                 while AutofarmEnabled do
                     local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
-                    local playerPlot = GetPlayerPlot()
+                    local plotCenter = GetPlayerPlotCenter()
 
-                    if renderedFolder and playerPlot then
-                        for _, egg in ipairs(renderedFolder:GetChildren()) do
-                            if not AutofarmEnabled then break end
+                    if renderedFolder and plotCenter then
+                        local targetEgg = nil
+                        
+                        if next(SelectedEggsLookup) ~= nil then
+                            for _, egg in ipairs(renderedFolder:GetChildren()) do
+                                if SelectedEggsLookup[egg.Name] then
+                                    targetEgg = egg
+                                    break
+                                end
+                            end
+                        end
 
-                            if table.find(SelectedEggs, egg.Name) or #SelectedEggs == 0 then
-                                local targetPos = egg:IsA("Model") and egg:GetPivot().Position or egg.Position
-                                local plotPos = playerPlot:IsA("Model") and playerPlot:GetPivot().Position or playerPlot.Position
+                        if targetEgg and targetEgg.Parent then
+                            local reached = FlyToTarget(targetEgg)
 
-                                if GlideTo(targetPos) then
-                                    task.wait(0.3)
-                                    GlideTo(plotPos)
-                                    task.wait(0.5)
+                            if reached and targetEgg.Parent and targetEgg:IsDescendantOf(Workspace) then
+                                InteractWithEgg(targetEgg)
+                                task.wait(1.30)
+                            end
+                            
+                            if AutofarmEnabled then
+                                FlyToTarget(plotCenter)
+                                task.wait(0.2)
+                            end
+                        end
+                    end
+                    task.wait(0.5)
+                end
+            end)
+        else
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+            end
+        end
+    end,
+})
+
+FarmTab:CreateSlider({
+    Name = "Autofarm Fly Speed",
+    Range = {100, 3000},
+    Increment = 50,
+    Suffix = " studs/sec",
+    CurrentValue = 400,
+    Flag = "FlySpeed",
+    Callback = function(Value)
+        FlySpeed = Value
+    end,
+})
+
+local EggDropdown = FarmTab:CreateDropdown({
+    Name = "Select Target Eggs",
+    Options = {"Loading..."},
+    MultipleOptions = true,
+    Flag = "EggSelection",
+    Callback = function(Options)
+        table.clear(SelectedEggsLookup)
+        if type(Options) == "table" then
+            for k, v in pairs(Options) do
+                if type(k) == "number" then
+                    SelectedEggsLookup[v] = true
+                elseif type(k) == "string" and (v == true or v == k) then
+                    SelectedEggsLookup[k] = true
+                end
+            end
+        end
+    end,
+})
+
+-- TAB 2: EGG (Nest & Hatch Automation)
+EggTab:CreateToggle({
+    Name = "Auto Put Egg to Nest",
+    CurrentValue = false,
+    Flag = "AutoPutEgg",
+    Callback = function(Value)
+        AutoNestEnabled = Value
+        if Value then
+            task.spawn(function()
+                while AutoNestEnabled do
+                    local plot = GetPlayerPlot()
+                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                    local gameRemotes = remotes and remotes:FindFirstChild("Game")
+                    local eggPlaced = gameRemotes and gameRemotes:FindFirstChild("EggPlaced")
+
+                    if plot and eggPlaced then
+                        local nestsFolder = plot:FindFirstChild("Nests")
+                        if nestsFolder then
+                            -- Checks nests 1-5 for free slots
+                            for nestId = 1, 5 do
+                                if not AutoNestEnabled then break end
+                                local nest = nestsFolder:FindFirstChild(tostring(nestId))
+                                if nest and IsNestFree(nest) then
+                                    eggPlaced:FireServer({
+                                        NestId = tostring(nestId)
+                                    })
+                                    task.wait(0.1)
                                 end
                             end
                         end
                     end
-                    task.wait(1)
+                    task.wait(0.5)
                 end
             end)
         end
     end,
 })
 
--- 3. Glide Speed Slider
-Tab:CreateSlider({
-    Name = "Autofarm Egg Glide Speed",
-    Range = {10, 300},
-    Increment = 5,
-    Suffix = " studs/sec",
-    CurrentValue = 50,
-    Flag = "GlideSpeed",
+EggTab:CreateToggle({
+    Name = "Auto Hatch Egg",
+    CurrentValue = false,
+    Flag = "AutoHatchEgg",
     Callback = function(Value)
-        GlideSpeed = Value
+        AutoHatchEnabled = Value
+        if Value then
+            task.spawn(function()
+                while AutoHatchEnabled do
+                    local plot = GetPlayerPlot()
+                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                    local gameRemotes = remotes and remotes:FindFirstChild("Game")
+                    local hatchRemote = gameRemotes and gameRemotes:FindFirstChild("Hatch")
+
+                    if plot and hatchRemote then
+                        local eggsFolder = plot:FindFirstChild("Eggs")
+                        if eggsFolder then
+                            -- Reads EggKey attribute from each egg in plot.Eggs
+                            for _, egg in ipairs(eggsFolder:GetChildren()) do
+                                if not AutoHatchEnabled then break end
+                                local eggKey = egg:GetAttribute("EggKey")
+                                if eggKey then
+                                    hatchRemote:FireServer({
+                                        EggKey = tostring(eggKey)
+                                    })
+                                    task.wait(0.1)
+                                end
+                            end
+                        end
+                    end
+                    task.wait(0.5)
+                end
+            end)
+        end
     end,
 })
 
--- 4. Dynamic Multiselect Dropdown
-local EggDropdown = Tab:CreateDropdown({
-    Name = "Select Target Eggs",
-    Options = {"Loading..."},
-    MultipleOptions = true,
-    Flag = "EggSelection",
-    Callback = function(Options)
-        SelectedEggs = Options
-    end,
-})
-
--- Realtime Dropdown List & ESP Sync
+-- Dynamic Multiselect & ESP Updater Loop
 local function FetchEggNames()
     local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
     local eggSet = {}
