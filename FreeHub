@@ -682,7 +682,8 @@ MiscTab:CreateToggle({
 -- CUSTOM TOP HUD UI CREATION (STYLIZED TELEPORT BAR)
 -- =================================================================
 local function BuildTopBarHUD()
-    local parentGui = gethui and gethui() or CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
+    -- Parented directly to PlayerGui with low DisplayOrder to render underneath floating executor controls
+    local parentGui = LocalPlayer:WaitForChild("PlayerGui")
     
     if parentGui:FindFirstChild("StallTeleportBar") then
         parentGui.StallTeleportBar:Destroy()
@@ -691,6 +692,7 @@ local function BuildTopBarHUD()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "StallTeleportBar"
     ScreenGui.ResetOnSpawn = false
+    ScreenGui.DisplayOrder = -10 -- Renders behind game native UI & floating executor icons
     ScreenGui.Parent = parentGui
 
     local Container = Instance.new("Frame")
@@ -764,7 +766,7 @@ MiscTab:CreateToggle({
     CurrentValue = true,
     Flag = "ShowTopBar",
     Callback = function(Value)
-        local parentGui = gethui and gethui() or CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:FindFirstChild("PlayerGui")
+        local parentGui = LocalPlayer:FindFirstChild("PlayerGui")
         local bar = parentGui and parentGui:FindFirstChild("StallTeleportBar")
         if bar then
             bar.Enabled = Value
