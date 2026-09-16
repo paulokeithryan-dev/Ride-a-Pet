@@ -11,7 +11,6 @@ local StatsService = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
-local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 local SelectedEggsLookup = {}
@@ -157,7 +156,6 @@ local function TeleportToStall(stallName)
     end
 
     if targetCF then
-        -- Teleports player 6 studs in front of the stall
         char.HumanoidRootPart.CFrame = targetCF * CFrame.new(0, 2, -6) * CFrame.Angles(0, math.pi, 0)
     end
 end
@@ -301,71 +299,19 @@ local MiscTab = Window:CreateTab({ Name = "🛠️ Misc" })
 -- =================================================================
 HomeTab:CreateSection({ Name = "📊 Stats" })
 
-local CashStat = HomeTab:CreateStat({
-    name = "💵 Cash",
-    prefix = "$",
-    value = 0,
-    compact = true
-})
-
-local CpsStat = HomeTab:CreateStat({
-    name = "📈 $/s",
-    prefix = "$",
-    value = 0,
-    compact = true
-})
-
-local GrabbedStat = HomeTab:CreateStat({
-    name = "🥚 Eggs Grabbed",
-    value = 0,
-    compact = true
-})
-
-local HatchedStat = HomeTab:CreateStat({
-    name = "🐣 Eggs Hatched",
-    value = 0,
-    compact = true
-})
-
-local SoldStat = HomeTab:CreateStat({
-    name = "🐶 Pets Sold",
-    value = 0,
-    compact = true
-})
+local CashStat = HomeTab:CreateStat({ name = "💵 Cash", prefix = "$", value = 0, compact = true })
+local CpsStat = HomeTab:CreateStat({ name = "📈 $/s", prefix = "$", value = 0, compact = true })
+local GrabbedStat = HomeTab:CreateStat({ name = "🥚 Eggs Grabbed", value = 0, compact = true })
+local HatchedStat = HomeTab:CreateStat({ name = "🐣 Eggs Hatched", value = 0, compact = true })
+local SoldStat = HomeTab:CreateStat({ name = "🐶 Pets Sold", value = 0, compact = true })
 
 HomeTab:CreateSection({ Name = "⚡ System Status" })
 
-local SessionStat = HomeTab:CreateStat({
-    name = "⏱️ Session",
-    value = 0,
-    suffix = " m",
-    compact = true
-})
-
-local FeaturesStat = HomeTab:CreateStat({
-    name = "⚙️ Features Active",
-    value = 0,
-    compact = true
-})
-
-local FpsStat = HomeTab:CreateStat({
-    name = "🎮 FPS",
-    value = 0,
-    compact = true
-})
-
-local PingStat = HomeTab:CreateStat({
-    name = "📡 Ping",
-    value = 0,
-    suffix = " ms",
-    compact = true
-})
-
-local PlayersStat = HomeTab:CreateStat({
-    name = "👥 Players",
-    value = 1,
-    compact = true
-})
+local SessionStat = HomeTab:CreateStat({ name = "⏱️ Session", value = 0, suffix = " m", compact = true })
+local FeaturesStat = HomeTab:CreateStat({ name = "⚙️ Features Active", value = 0, compact = true })
+local FpsStat = HomeTab:CreateStat({ name = "🎮 FPS", value = 0, compact = true })
+local PingStat = HomeTab:CreateStat({ name = "📡 Ping", value = 0, suffix = " ms", compact = true })
+local PlayersStat = HomeTab:CreateStat({ name = "👥 Players", value = 1, compact = true })
 
 HomeTab:CreateSection({ Name = "🌐 Server Utilities" })
 
@@ -374,11 +320,7 @@ HomeTab:CreateButton({
     Callback = function()
         if setclipboard then
             setclipboard(game.JobId)
-            Rayfield:Notify({
-                Title = "Clipboard",
-                Content = "Job ID copied to clipboard!",
-                Duration = 2
-            })
+            Rayfield:Notify({ Title = "Clipboard", Content = "Job ID copied to clipboard!", Duration = 2 })
         end
     end,
 })
@@ -407,6 +349,7 @@ FarmTab:CreateToggle({
             end
             table.clear(ActiveHighlights)
         end
+        Rayfield:SaveConfiguration()
     end,
 })
 
@@ -419,6 +362,7 @@ FarmTab:CreateSlider({
     Flag = "FlySpeed",
     Callback = function(Value)
         FlySpeed = Value
+        Rayfield:SaveConfiguration()
     end,
 })
 
@@ -431,6 +375,7 @@ FarmTab:CreateToggle({
     Callback = function(Value)
         AutofarmEnabled = Value
         SetNoclip(Value)
+        Rayfield:SaveConfiguration()
         
         if Value then
             task.spawn(function()
@@ -493,6 +438,7 @@ FarmTab:CreateDropdown({
                 end
             end
         end
+        Rayfield:SaveConfiguration()
     end,
 })
 
@@ -518,6 +464,7 @@ EggTab:CreateDropdown({
                 end
             end
         end
+        Rayfield:SaveConfiguration()
     end,
 })
 
@@ -529,6 +476,7 @@ EggTab:CreateToggle({
     Flag = "AutoPutEgg",
     Callback = function(Value)
         AutoNestEnabled = Value
+        Rayfield:SaveConfiguration()
         if Value then
             task.spawn(function()
                 while AutoNestEnabled do
@@ -544,9 +492,7 @@ EggTab:CreateToggle({
                                 if not AutoNestEnabled then break end
                                 local nest = nestsFolder:FindFirstChild(tostring(nestId))
                                 if nest and IsNestFree(nest) then
-                                    eggPlaced:FireServer({
-                                        NestId = tostring(nestId)
-                                    })
+                                    eggPlaced:FireServer({ NestId = tostring(nestId) })
                                     EggsPlacedCount = EggsPlacedCount + 1
                                     task.wait(0.1)
                                 end
@@ -566,6 +512,7 @@ EggTab:CreateToggle({
     Flag = "AutoHatchEgg",
     Callback = function(Value)
         AutoHatchEnabled = Value
+        Rayfield:SaveConfiguration()
         if Value then
             task.spawn(function()
                 while AutoHatchEnabled do
@@ -581,9 +528,7 @@ EggTab:CreateToggle({
                                 if not AutoHatchEnabled then break end
                                 local eggKey = egg:GetAttribute("EggKey")
                                 if eggKey then
-                                    hatchRemote:FireServer({
-                                        EggKey = tostring(eggKey)
-                                    })
+                                    hatchRemote:FireServer({ EggKey = tostring(eggKey) })
                                     EggsHatchedCount = EggsHatchedCount + 1
                                     task.wait(0.1)
                                 end
@@ -600,6 +545,20 @@ EggTab:CreateToggle({
 -- =================================================================
 -- MISC TAB CONTENT
 -- =================================================================
+MiscTab:CreateSection({ Name = "💾 Settings Management" })
+
+MiscTab:CreateButton({
+    Name = "💾 Save Configuration Now",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+        Rayfield:Notify({
+            Title = "Config Saved",
+            Content = "Your settings have been saved!",
+            Duration = 3
+        })
+    end,
+})
+
 MiscTab:CreateSection({ Name = "📍 Fast Teleports" })
 
 MiscTab:CreateButton({ Name = "🥚 TP Egg Tracker Stall", Callback = function() TeleportToStall("EggTracker") end })
@@ -616,6 +575,7 @@ MiscTab:CreateToggle({
     Flag = "InfZoom",
     Callback = function(Value)
         InfZoomEnabled = Value
+        Rayfield:SaveConfiguration()
         if Value then
             LocalPlayer.CameraMaxZoomDistance = 100000
         else
@@ -630,6 +590,7 @@ MiscTab:CreateToggle({
     Flag = "AntiAFK",
     Callback = function(Value)
         AntiAFKEnabled = Value
+        Rayfield:SaveConfiguration()
         if Value then
             if not AntiAFKConnection then
                 AntiAFKConnection = LocalPlayer.Idled:Connect(function()
@@ -655,6 +616,7 @@ MiscTab:CreateToggle({
     Flag = "FastMode",
     Callback = function(Value)
         FastModeEnabled = Value
+        Rayfield:SaveConfiguration()
         if Value then
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
@@ -682,7 +644,6 @@ MiscTab:CreateToggle({
 -- CUSTOM TOP HUD UI CREATION (STYLIZED TELEPORT BAR)
 -- =================================================================
 local function BuildTopBarHUD()
-    -- Parented directly to PlayerGui with low DisplayOrder to render underneath floating executor controls
     local parentGui = LocalPlayer:WaitForChild("PlayerGui")
     
     if parentGui:FindFirstChild("StallTeleportBar") then
@@ -692,7 +653,7 @@ local function BuildTopBarHUD()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "StallTeleportBar"
     ScreenGui.ResetOnSpawn = false
-    ScreenGui.DisplayOrder = -10 -- Renders behind game native UI & floating executor icons
+    ScreenGui.DisplayOrder = -10
     ScreenGui.Parent = parentGui
 
     local Container = Instance.new("Frame")
@@ -742,7 +703,6 @@ local function BuildTopBarHUD()
         uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         uiStroke.Parent = btn
 
-        -- Hover & Click FX
         btn.MouseEnter:Connect(function()
             btn.Size = UDim2.new(0, 117, 1, 2)
         end)
@@ -771,6 +731,7 @@ MiscTab:CreateToggle({
         if bar then
             bar.Enabled = Value
         end
+        Rayfield:SaveConfiguration()
     end,
 })
 
@@ -804,12 +765,10 @@ task.spawn(function()
                 end
             end
 
-            -- Maintain camera zoom distance if infinite zoom is toggled on
             if InfZoomEnabled then
                 LocalPlayer.CameraMaxZoomDistance = 100000
             end
 
-            -- Update Stat UI Cards
             SessionStat:Set(elapsedMinutes)
             FeaturesStat:Set(activeFeatures)
             FpsStat:Set(fps)
@@ -844,5 +803,5 @@ task.spawn(function()
     end
 end)
 
--- Load saved configuration automatically on execution
+-- Automatically load saved settings on execution
 Rayfield:LoadConfiguration()
