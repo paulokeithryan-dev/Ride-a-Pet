@@ -14,7 +14,7 @@ local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
-local ASSET_ICON = "rbxassetid://132213994055596"
+local ASSET_ICON = "rbxassetid://89387722763691"
 
 local SelectedEggsLookup = {}
 local NestEggsLookup = {}
