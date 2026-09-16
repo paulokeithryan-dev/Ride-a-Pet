@@ -9,6 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StatsService = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 local SelectedEggsLookup = {}
@@ -18,8 +21,13 @@ local AutofarmEnabled = false
 local EggESPEnabled = false
 local AutoNestEnabled = false
 local AutoHatchEnabled = false
+local InfZoomEnabled = false
+local FastModeEnabled = false
+local AntiAFKEnabled = false
+
 local ActiveHighlights = {}
 local NoclipConnection = nil
+local AntiAFKConnection = nil
 
 local SessionStartTime = os.time()
 local EggsGrabbedCount = 0
@@ -40,16 +48,29 @@ local ExtractedEggsList = {
     "Cherub Egg"
 }
 
+-- Fetch Cash directly from LocalPlayer.SavedData.Cash
 local function GetPlayerCash()
     local cash = 0
     pcall(function()
-        local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
-        if leaderstats then
-            local cashVal = leaderstats:FindFirstChild("Cash") or leaderstats:FindFirstChild("Coins") or leaderstats:FindFirstChild("Money")
+        if LocalPlayer:FindFirstChild("SavedData") and LocalPlayer.SavedData:FindFirstChild("Cash") then
+            cash = LocalPlayer.SavedData.Cash.Value
+        elseif LocalPlayer:FindFirstChild("leaderstats") then
+            local cashVal = LocalPlayer.leaderstats:FindFirstChild("Cash") or LocalPlayer.leaderstats:FindFirstChild("Coins") or LocalPlayer.leaderstats:FindFirstChild("Money")
             if cashVal then cash = cashVal.Value end
         end
     end)
     return cash
+end
+
+-- Fetch $/s directly from LocalPlayer.leaderstats["Income/s"]
+local function GetPlayerIncome()
+    local income = nil
+    pcall(function()
+        if LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Income/s") then
+            income = LocalPlayer.leaderstats["Income/s"].Value
+        end
+    end)
+    return income
 end
 
 local function GetPing()
@@ -63,28 +84,6 @@ local function GetPing()
         end
     end)
     return ping
-end
-
-local function SetNoclip(enabled)
-    if enabled then
-        if not NoclipConnection then
-            NoclipConnection = RunService.Stepped:Connect(function()
-                local char = LocalPlayer.Character
-                if char then
-                    for _, part in ipairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end)
-        end
-    else
-        if NoclipConnection then
-            NoclipConnection:Disconnect()
-            NoclipConnection = nil
-        end
-    end
 end
 
 local function GetPlayerPlot()
@@ -115,6 +114,74 @@ local function GetPlayerPlotCenter()
         centerCFrame = base and base.CFrame or CFrame.new()
     end
     return centerCFrame.Position + Vector3.new(0, 4, 0)
+end
+
+-- Teleport function to player's plot
+local function TeleportToMyPlot()
+    local plotCenter = GetPlayerPlotCenter()
+    if plotCenter then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = CFrame.new(plotCenter)
+        end
+    else
+        Rayfield:Notify({ Title = "Teleport Error", Content = "Could not find your plot!", Duration = 3 })
+    end
+end
+
+-- Teleport function to position player in front of workspace.Stalls.[StallName]
+local function TeleportToStall(stallName)
+    local stallsFolder = Workspace:FindFirstChild("Stalls")
+    if not stallsFolder then
+        Rayfield:Notify({ Title = "Teleport Error", Content = "Workspace.Stalls folder not found!", Duration = 3 })
+        return
+    end
+
+    local stall = stallsFolder:FindFirstChild(stallName)
+    if not stall then
+        Rayfield:Notify({ Title = "Teleport Error", Content = "Stall '" .. stallName .. "' not found!", Duration = 3 })
+        return
+    end
+
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local targetCF
+    if stall:IsA("Model") then
+        targetCF = stall:GetPivot()
+    elseif stall:IsA("BasePart") then
+        targetCF = stall.CFrame
+    else
+        local part = stall:FindFirstChildWhichIsA("BasePart", true)
+        if part then targetCF = part.CFrame end
+    end
+
+    if targetCF then
+        -- Teleports player 6 studs in front of the stall
+        char.HumanoidRootPart.CFrame = targetCF * CFrame.new(0, 2, -6) * CFrame.Angles(0, math.pi, 0)
+    end
+end
+
+local function SetNoclip(enabled)
+    if enabled then
+        if not NoclipConnection then
+            NoclipConnection = RunService.Stepped:Connect(function()
+                local char = LocalPlayer.Character
+                if char then
+                    for _, part in ipairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        end
+    else
+        if NoclipConnection then
+            NoclipConnection:Disconnect()
+            NoclipConnection = nil
+        end
+    end
 end
 
 local function IsNestFree(nest)
@@ -218,89 +285,92 @@ local Window = Rayfield:CreateWindow({
     LoadingTitle = "Egg Hub Interface",
     LoadingSubtitle = "Rayfield Interface",
     ConfigurationSaving = {
-        Enabled = false
+        Enabled = true,
+        FolderName = "EggHubConfig",
+        FileName = "SavedSettings"
     }
 })
 
-local HomeTab = Window:CreateTab({ Name = "Home" })
-local FarmTab = Window:CreateTab({ Name = "Egg Automation" })
-local EggTab = Window:CreateTab({ Name = "Egg Management" })
+local HomeTab = Window:CreateTab({ Name = "🏠 Home" })
+local FarmTab = Window:CreateTab({ Name = "⚡ Egg Automation" })
+local EggTab = Window:CreateTab({ Name = "🥚 Egg Management" })
+local MiscTab = Window:CreateTab({ Name = "🛠️ Misc" })
 
 -- =================================================================
--- HOME TAB CONTENT (NATIVE RAYFIELD STAT CARDS)
+-- HOME TAB CONTENT
 -- =================================================================
-HomeTab:CreateSection("Status")
-
-local SessionStat = HomeTab:CreateStat({
-    name = "session (m)",
-    value = 0,
-    suffix = " m",
-    compact = true
-})
-
-local FeaturesStat = HomeTab:CreateStat({
-    name = "features on",
-    value = 0,
-    compact = true
-})
-
-local FpsStat = HomeTab:CreateStat({
-    name = "fps",
-    value = 0,
-    compact = true
-})
-
-local PingStat = HomeTab:CreateStat({
-    name = "ping",
-    value = 0,
-    suffix = " ms",
-    compact = true
-})
-
-local PlayersStat = HomeTab:CreateStat({
-    name = "players",
-    value = 1,
-    compact = true
-})
-
-HomeTab:CreateSection("Stats")
+HomeTab:CreateSection({ Name = "📊 Stats" })
 
 local CashStat = HomeTab:CreateStat({
-    name = "Cash",
+    name = "💵 Cash",
     prefix = "$",
     value = 0,
     compact = true
 })
 
 local CpsStat = HomeTab:CreateStat({
-    name = "$ / s",
+    name = "📈 $/s",
     prefix = "$",
     value = 0,
     compact = true
 })
 
 local GrabbedStat = HomeTab:CreateStat({
-    name = "Eggs Grabbed",
+    name = "🥚 Eggs Grabbed",
     value = 0,
     compact = true
 })
 
 local HatchedStat = HomeTab:CreateStat({
-    name = "Eggs Hatched",
+    name = "🐣 Eggs Hatched",
     value = 0,
     compact = true
 })
 
 local SoldStat = HomeTab:CreateStat({
-    name = "Pets Sold",
+    name = "🐶 Pets Sold",
     value = 0,
     compact = true
 })
 
-HomeTab:CreateSection("Server Utilities")
+HomeTab:CreateSection({ Name = "⚡ System Status" })
+
+local SessionStat = HomeTab:CreateStat({
+    name = "⏱️ Session",
+    value = 0,
+    suffix = " m",
+    compact = true
+})
+
+local FeaturesStat = HomeTab:CreateStat({
+    name = "⚙️ Features Active",
+    value = 0,
+    compact = true
+})
+
+local FpsStat = HomeTab:CreateStat({
+    name = "🎮 FPS",
+    value = 0,
+    compact = true
+})
+
+local PingStat = HomeTab:CreateStat({
+    name = "📡 Ping",
+    value = 0,
+    suffix = " ms",
+    compact = true
+})
+
+local PlayersStat = HomeTab:CreateStat({
+    name = "👥 Players",
+    value = 1,
+    compact = true
+})
+
+HomeTab:CreateSection({ Name = "🌐 Server Utilities" })
 
 HomeTab:CreateButton({
-    Name = "Copy Job ID",
+    Name = "📋 Copy Job ID",
     Callback = function()
         if setclipboard then
             setclipboard(game.JobId)
@@ -314,7 +384,7 @@ HomeTab:CreateButton({
 })
 
 HomeTab:CreateButton({
-    Name = "Rejoin Server",
+    Name = "🔄 Rejoin Server",
     Callback = function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
     end,
@@ -323,7 +393,7 @@ HomeTab:CreateButton({
 -- =================================================================
 -- AUTOMATION TAB CONTENT
 -- =================================================================
-FarmTab:CreateSection("Visuals and Movement")
+FarmTab:CreateSection({ Name = "👁️ Visuals & Movement" })
 
 FarmTab:CreateToggle({
     Name = "Egg ESP",
@@ -352,7 +422,7 @@ FarmTab:CreateSlider({
     end,
 })
 
-FarmTab:CreateSection("Farm Controls")
+FarmTab:CreateSection({ Name = "🌾 Farm Controls" })
 
 FarmTab:CreateToggle({
     Name = "Autofarm Egg",
@@ -429,7 +499,7 @@ FarmTab:CreateDropdown({
 -- =================================================================
 -- EGG TAB CONTENT
 -- =================================================================
-EggTab:CreateSection("Nest Configuration")
+EggTab:CreateSection({ Name = "🪹 Nest Configuration" })
 
 EggTab:CreateDropdown({
     Name = "Select Eggs for Nest",
@@ -451,7 +521,7 @@ EggTab:CreateDropdown({
     end,
 })
 
-EggTab:CreateSection("Automation Loops")
+EggTab:CreateSection({ Name = "🔄 Automation Loops" })
 
 EggTab:CreateToggle({
     Name = "Auto Put Egg to Nest",
@@ -528,6 +598,181 @@ EggTab:CreateToggle({
 })
 
 -- =================================================================
+-- MISC TAB CONTENT
+-- =================================================================
+MiscTab:CreateSection({ Name = "📍 Fast Teleports" })
+
+MiscTab:CreateButton({ Name = "🥚 TP Egg Tracker Stall", Callback = function() TeleportToStall("EggTracker") end })
+MiscTab:CreateButton({ Name = "🥩 TP Food Stall", Callback = function() TeleportToStall("Food") end })
+MiscTab:CreateButton({ Name = "🏡 TP My Plot", Callback = function() TeleportToMyPlot() end })
+MiscTab:CreateButton({ Name = "⚙️ TP Gears Stall", Callback = function() TeleportToStall("Gears") end })
+MiscTab:CreateButton({ Name = "💰 TP Sell Stall", Callback = function() TeleportToStall("Sell") end })
+
+MiscTab:CreateSection({ Name = "⚙️ Player Options" })
+
+MiscTab:CreateToggle({
+    Name = "Infinite Zoom",
+    CurrentValue = false,
+    Flag = "InfZoom",
+    Callback = function(Value)
+        InfZoomEnabled = Value
+        if Value then
+            LocalPlayer.CameraMaxZoomDistance = 100000
+        else
+            LocalPlayer.CameraMaxZoomDistance = 128
+        end
+    end,
+})
+
+MiscTab:CreateToggle({
+    Name = "Anti-AFK",
+    CurrentValue = false,
+    Flag = "AntiAFK",
+    Callback = function(Value)
+        AntiAFKEnabled = Value
+        if Value then
+            if not AntiAFKConnection then
+                AntiAFKConnection = LocalPlayer.Idled:Connect(function()
+                    VirtualUser:Button2Down(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+                    task.wait(1)
+                    VirtualUser:Button2Up(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+                end)
+            end
+        else
+            if AntiAFKConnection then
+                AntiAFKConnection:Disconnect()
+                AntiAFKConnection = nil
+            end
+        end
+    end,
+})
+
+MiscTab:CreateSection({ Name = "🚀 Optimization" })
+
+MiscTab:CreateToggle({
+    Name = "Fast Mode (FPS Booster)",
+    CurrentValue = false,
+    Flag = "FastMode",
+    Callback = function(Value)
+        FastModeEnabled = Value
+        if Value then
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+
+            local terrain = Workspace:FindFirstChildOfClass("Terrain")
+            if terrain then
+                terrain.WaterWaveSize = 0
+                terrain.WaterWaveSpeed = 0
+                terrain.WaterReflectance = 0
+                terrain.WaterTransparency = 0
+            end
+
+            for _, v in ipairs(game:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                elseif v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("PostEffect") then
+                    v.Enabled = false
+                end
+            end
+        end
+    end,
+})
+
+-- =================================================================
+-- CUSTOM TOP HUD UI CREATION (STYLIZED TELEPORT BAR)
+-- =================================================================
+local function BuildTopBarHUD()
+    local parentGui = gethui and gethui() or CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
+    
+    if parentGui:FindFirstChild("StallTeleportBar") then
+        parentGui.StallTeleportBar:Destroy()
+    end
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "StallTeleportBar"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = parentGui
+
+    local Container = Instance.new("Frame")
+    Container.Name = "Container"
+    Container.Size = UDim2.new(0, 620, 0, 42)
+    Container.Position = UDim2.new(0.5, 0, 0, 12)
+    Container.AnchorPoint = Vector2.new(0.5, 0)
+    Container.BackgroundTransparency = 1
+    Container.Parent = ScreenGui
+
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+    UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Padding = UDim.new(0, 8)
+    UIListLayout.Parent = Container
+
+    local buttonsData = {
+        { Text = "Egg Tracker 🥚", Target = "EggTracker", Color = Color3.fromRGB(76, 175, 80), Border = Color3.fromRGB(46, 125, 50) },
+        { Text = "Food 🥩", Target = "Food", Color = Color3.fromRGB(244, 67, 54), Border = Color3.fromRGB(183, 28, 28) },
+        { Text = "My Plot 🏡", Target = "MyPlot", Color = Color3.fromRGB(121, 85, 72), Border = Color3.fromRGB(62, 39, 35) },
+        { Text = "Gears ⚙️", Target = "Gears", Color = Color3.fromRGB(33, 150, 243), Border = Color3.fromRGB(13, 71, 161) },
+        { Text = "Sell 💰", Target = "Sell", Color = Color3.fromRGB(255, 193, 7), Border = Color3.fromRGB(245, 124, 0) }
+    }
+
+    for idx, data in ipairs(buttonsData) do
+        local btn = Instance.new("TextButton")
+        btn.Name = data.Target .. "Button"
+        btn.Size = UDim2.new(0, 115, 1, 0)
+        btn.BackgroundColor3 = data.Color
+        btn.Text = data.Text
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.FredokaOne
+        btn.TextSize = 14
+        btn.TextStrokeTransparency = 0.5
+        btn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        btn.LayoutOrder = idx
+        btn.Parent = Container
+
+        local uiCorner = Instance.new("UICorner")
+        uiCorner.CornerRadius = UDim.new(0, 8)
+        uiCorner.Parent = btn
+
+        local uiStroke = Instance.new("UIStroke")
+        uiStroke.Color = data.Border
+        uiStroke.Thickness = 2.5
+        uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        uiStroke.Parent = btn
+
+        -- Hover & Click FX
+        btn.MouseEnter:Connect(function()
+            btn.Size = UDim2.new(0, 117, 1, 2)
+        end)
+        btn.MouseLeave:Connect(function()
+            btn.Size = UDim2.new(0, 115, 1, 0)
+        end)
+        btn.MouseButton1Click:Connect(function()
+            if data.Target == "MyPlot" then
+                TeleportToMyPlot()
+            else
+                TeleportToStall(data.Target)
+            end
+        end)
+    end
+end
+
+BuildTopBarHUD()
+
+MiscTab:CreateToggle({
+    Name = "Show Top Teleport Bar",
+    CurrentValue = true,
+    Flag = "ShowTopBar",
+    Callback = function(Value)
+        local parentGui = gethui and gethui() or CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:FindFirstChild("PlayerGui")
+        local bar = parentGui and parentGui:FindFirstChild("StallTeleportBar")
+        if bar then
+            bar.Enabled = Value
+        end
+    end,
+})
+
+-- =================================================================
 -- LIVE REFRESH LOOP
 -- =================================================================
 task.spawn(function()
@@ -537,21 +782,32 @@ task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
             local elapsedMinutes = math.floor((os.time() - SessionStartTime) / 60)
-            local activeFeatures = (AutofarmEnabled and 1 or 0) + (EggESPEnabled and 1 or 0) + (AutoNestEnabled and 1 or 0) + (AutoHatchEnabled and 1 or 0)
+            local activeFeatures = (AutofarmEnabled and 1 or 0) + (EggESPEnabled and 1 or 0) + (AutoNestEnabled and 1 or 0) + (AutoHatchEnabled and 1 or 0) + (InfZoomEnabled and 1 or 0) + (AntiAFKEnabled and 1 or 0) + (FastModeEnabled and 1 or 0)
             local fps = math.floor(Workspace:GetRealPhysicsFPS())
             local ping = GetPing()
             local playerCount = #Players:GetPlayers()
 
             local currentCash = GetPlayerCash()
-            local now = os.clock()
-            local timeDiff = now - LastCashCheckTime
-            if timeDiff >= 1 then
-                CashPerSecond = math.max(0, math.floor((currentCash - PreviousCash) / timeDiff))
-                PreviousCash = currentCash
-                LastCashCheckTime = now
+            local directIncome = GetPlayerIncome()
+
+            if directIncome then
+                CashPerSecond = directIncome
+            else
+                local now = os.clock()
+                local timeDiff = now - LastCashCheckTime
+                if timeDiff >= 1 then
+                    CashPerSecond = math.max(0, math.floor((currentCash - PreviousCash) / timeDiff))
+                    PreviousCash = currentCash
+                    LastCashCheckTime = now
+                end
             end
 
-            -- Direct numeric updates using Stat:Set()
+            -- Maintain camera zoom distance if infinite zoom is toggled on
+            if InfZoomEnabled then
+                LocalPlayer.CameraMaxZoomDistance = 100000
+            end
+
+            -- Update Stat UI Cards
             SessionStat:Set(elapsedMinutes)
             FeaturesStat:Set(activeFeatures)
             FpsStat:Set(fps)
@@ -585,3 +841,6 @@ task.spawn(function()
         end
     end
 end)
+
+-- Load saved configuration automatically on execution
+Rayfield:LoadConfiguration()
