@@ -1,22 +1,6 @@
 local HttpService = game:GetService("HttpService")
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
--- Robust notification helper
-local function SafeNotify(data)
-    pcall(function()
-        if type(Rayfield) == "table" then
-            if typeof(Rayfield.Notify) == "function" then
-                if not data.Image then
-                    data.Image = 107078844281790
-                end
-                Rayfield:Notify(data)
-            elseif data and data.Title and data.Content then
-                print("[KissoHub Notification] " .. data.Title .. ": " .. data.Content)
-            end
-        end
-    end)
-end
-
 -- =================================================================
 -- SERVICES & UTILITIES
 -- =================================================================
@@ -64,6 +48,91 @@ local ExtractedEggsList = {
     "Cherub Egg"
 }
 
+-- =================================================================
+-- WINDOW & CUSTOM HIGH-CONTRAST THEME
+-- =================================================================
+local Window = Rayfield:CreateWindow({
+    Name = "KissoHub",
+    LoadingTitle = "KissoHub Loading...",
+    LoadingSubtitle = "Brought to you by Kisso",
+    
+    ShowText = "KissoHub",
+    Icon = 107078844281790,
+
+    Theme = {
+        WindowColor = ColorSequence.new(Color3.fromRGB(15, 18, 24), Color3.fromRGB(10, 12, 16)),
+        SurfaceStroke = Color3.fromRGB(0, 180, 255),
+        
+        TitlingColor = Color3.fromRGB(255, 255, 255),
+        ContentColor = Color3.fromRGB(235, 240, 245),
+        ElementTextHoverColor = Color3.fromRGB(255, 255, 255),
+        ActionColor = Color3.fromRGB(0, 210, 255),
+
+        TabColor = Color3.fromRGB(210, 220, 230),
+        TabBackground = ColorSequence.new(Color3.fromRGB(26, 32, 44), Color3.fromRGB(18, 22, 30)),
+        TabStroke = ColorSequence.new(Color3.fromRGB(0, 180, 255), Color3.fromRGB(0, 120, 220)),
+
+        ElementGradient = ColorSequence.new(Color3.fromRGB(22, 27, 36), Color3.fromRGB(16, 20, 27)),
+        ElementStroke = Color3.fromRGB(40, 48, 62),
+        ElementStrokeHover = Color3.fromRGB(0, 180, 255),
+        ElementTransparency = 0,
+        StatBackground = Color3.fromRGB(24, 30, 42),
+
+        AccentColor = Color3.fromRGB(0, 185, 255),
+        AccentStroke = Color3.fromRGB(0, 130, 210),
+        ToggleTrack = Color3.fromRGB(32, 38, 50),
+        ToggleKnobOff = Color3.fromRGB(170, 175, 185),
+
+        FieldBackground = Color3.fromRGB(26, 32, 42),
+        PlaceholderColor = Color3.fromRGB(130, 140, 155),
+        DropdownHighlight = Color3.fromRGB(0, 140, 220)
+    },
+
+    ToggleUIKeybind = "K",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "KissoHubFolder",
+        FileName = "UserPreferences"
+    }
+})
+
+-- Gen2 Header Tags
+local StatusTag = Window:CreateTag({
+    text = "v1.0.0",
+    color = Color3.fromRGB(0, 185, 255)
+})
+
+local StateTag = Window:CreateTag({
+    text = "IDLE",
+    color = Color3.fromRGB(150, 150, 150)
+})
+
+-- Updated Notification Helper using Gen2 window:Notify and window:Toast
+local function SafeNotify(title, content, duration)
+    pcall(function()
+        Window:Notify({
+            title = title or "KissoHub",
+            content = content or "",
+            duration = duration or 4,
+            icon = 107078844281790
+        })
+    end)
+end
+
+local function QuickToast(title, subtitle)
+    pcall(function()
+        Window:Toast({
+            title = title,
+            subtitle = subtitle,
+            position = "Top",
+            icon = 107078844281790
+        })
+    end)
+end
+
+-- =================================================================
+-- HELPER FUNCTIONS
+-- =================================================================
 local function GetPlayerCash()
     local cash = 0
     pcall(function()
@@ -136,22 +205,23 @@ local function TeleportToMyPlot()
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
             char.HumanoidRootPart.CFrame = CFrame.new(plotCenter)
+            QuickToast("Teleported", "Moved to your plot")
         end
     else
-        SafeNotify({ Title = "Teleport Error", Content = "Could not find your plot!", Duration = 3 })
+        SafeNotify("Teleport Error", "Could not find your plot!", 3)
     end
 end
 
 local function TeleportToStall(stallName)
     local stallsFolder = Workspace:FindFirstChild("Stalls")
     if not stallsFolder then
-        SafeNotify({ Title = "Teleport Error", Content = "Workspace.Stalls folder not found!", Duration = 3 })
+        SafeNotify("Teleport Error", "Workspace.Stalls folder not found!", 3)
         return
     end
 
     local stall = stallsFolder:FindFirstChild(stallName)
     if not stall then
-        SafeNotify({ Title = "Teleport Error", Content = "Stall '" .. stallName .. "' not found!", Duration = 3 })
+        SafeNotify("Teleport Error", "Stall '" .. stallName .. "' not found!", 3)
         return
     end
 
@@ -170,6 +240,7 @@ local function TeleportToStall(stallName)
 
     if targetCF then
         char.HumanoidRootPart.CFrame = targetCF * CFrame.new(0, 2, -6) * CFrame.Angles(0, math.pi, 0)
+        QuickToast("Teleported", "Moved to " .. stallName)
     end
 end
 
@@ -289,45 +360,15 @@ local function InteractWithEgg(egg)
 end
 
 -- =================================================================
--- WINDOW & TABS CREATION (KISSO HUB CUSTOMIZED)
+-- TABS & CONTROLS
 -- =================================================================
-local Window = Rayfield:CreateWindow({
-    Name = "KissoHub | v1.0.0",
-    LoadingTitle = "KissoHub is Loading...",
-    LoadingSubtitle = "Brought to you by Kisso",
-    ShowText = "KissoHub",
-
-    Theme = {
-        WindowColor = Color3.fromRGB(18, 20, 26),     -- Dark Slate Base
-        ContentColor = Color3.fromRGB(28, 32, 42),    -- Panel Background
-        TitlingColor = Color3.fromRGB(255, 255, 255),  -- White Text
-        ActionColor = Color3.fromRGB(0, 188, 255),    -- Electric Cyan Accent
-    },
-
-    ToggleUIKeybind = "K",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "KissoHubFolder",
-        FileName = "UserPreferences"
-    },
-
-    Discord = {
-        Enabled = false,
-        Invite = "yourdiscordinvitecode",
-        RememberJoins = true
-    }
-})
-
 local HomeTab = Window:CreateTab({ Name = "🏠 Home", Icon = 107078844281790 })
 local FarmTab = Window:CreateTab({ Name = "⚡ Egg Automation" })
 local EggTab = Window:CreateTab({ Name = "🥚 Egg Management" })
 local MiscTab = Window:CreateTab({ Name = "🛠️ Misc" })
 
--- =================================================================
--- HOME TAB CONTENT
--- =================================================================
+-- Home Tab
 HomeTab:CreateSection({ Name = "📊 Stats" })
-
 local CashStat = HomeTab:CreateStat({ name = "💵 Cash", prefix = "$", value = 0, compact = true })
 local CpsStat = HomeTab:CreateStat({ name = "📈 $/s", prefix = "$", value = 0, compact = true })
 local GrabbedStat = HomeTab:CreateStat({ name = "🥚 Eggs Grabbed", value = 0, compact = true })
@@ -335,9 +376,7 @@ local HatchedStat = HomeTab:CreateStat({ name = "🐣 Eggs Hatched", value = 0, 
 local SoldStat = HomeTab:CreateStat({ name = "🐶 Pets Sold", value = 0, compact = true })
 
 HomeTab:CreateDivider({ spacing = 14 })
-
 HomeTab:CreateSection({ Name = "⚡ System Status" })
-
 local SessionStat = HomeTab:CreateStat({ name = "⏱️ Session", value = 0, suffix = " m", compact = true })
 local FeaturesStat = HomeTab:CreateStat({ name = "⚙️ Features Active", value = 0, compact = true })
 local FpsStat = HomeTab:CreateStat({ name = "🎮 FPS", value = 0, compact = true })
@@ -345,15 +384,13 @@ local PingStat = HomeTab:CreateStat({ name = "📡 Ping", value = 0, suffix = " 
 local PlayersStat = HomeTab:CreateStat({ name = "👥 Players", value = 1, compact = true })
 
 HomeTab:CreateDivider({ text = "controls" })
-
 HomeTab:CreateSection({ Name = "🌐 Server Utilities" })
-
 HomeTab:CreateButton({
     Name = "📋 Copy Job ID",
     Callback = function()
         if setclipboard then
             setclipboard(game.JobId)
-            SafeNotify({ Title = "Clipboard", Content = "Job ID copied to clipboard!", Duration = 2 })
+            QuickToast("Copied", "Job ID copied to clipboard")
         end
     end,
 })
@@ -365,12 +402,9 @@ HomeTab:CreateButton({
     end,
 })
 
--- =================================================================
--- AUTOMATION TAB CONTENT
--- =================================================================
+-- Farm Tab
 FarmTab:CreateSection({ Name = "👁️ Visuals & Movement" })
-
-local EggESPToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
     Name = "Egg ESP",
     Flag = "EggESP",
     CurrentValue = false,
@@ -385,7 +419,7 @@ local EggESPToggle = FarmTab:CreateToggle({
     end,
 })
 
-local FlySpeedSlider = FarmTab:CreateSlider({
+FarmTab:CreateSlider({
     Name = "Autofarm Fly Speed",
     Flag = "FlySpeed",
     Range = {100, 3000},
@@ -398,10 +432,9 @@ local FlySpeedSlider = FarmTab:CreateSlider({
 })
 
 FarmTab:CreateDivider({ text = "execution" })
-
 FarmTab:CreateSection({ Name = "🌾 Farm Controls" })
 
-local AutofarmToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
     Name = "Autofarm Egg",
     Flag = "AutofarmEgg",
     CurrentValue = false,
@@ -410,6 +443,8 @@ local AutofarmToggle = FarmTab:CreateToggle({
         SetNoclip(Value)
         
         if Value then
+            StateTag:Set({ text = "FARMING", color = Color3.fromRGB(80, 200, 120) })
+            QuickToast("Autofarm Active", "Harvesting target eggs")
             task.spawn(function()
                 while AutofarmEnabled do
                     local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
@@ -417,7 +452,6 @@ local AutofarmToggle = FarmTab:CreateToggle({
 
                     if renderedFolder and plotCenter then
                         local targetEgg = nil
-                        
                         if next(SelectedEggsLookup) ~= nil then
                             for _, egg in ipairs(renderedFolder:GetChildren()) do
                                 if SelectedEggsLookup[egg.Name] then
@@ -429,12 +463,10 @@ local AutofarmToggle = FarmTab:CreateToggle({
 
                         if targetEgg and targetEgg.Parent then
                             local reached = FlyToTarget(targetEgg)
-
                             if reached and targetEgg.Parent and targetEgg:IsDescendantOf(Workspace) then
                                 InteractWithEgg(targetEgg)
                                 task.wait(1.30)
                             end
-                            
                             if AutofarmEnabled then
                                 FlyToTarget(plotCenter)
                                 task.wait(0.2)
@@ -445,6 +477,7 @@ local AutofarmToggle = FarmTab:CreateToggle({
                 end
             end)
         else
+            StateTag:Set({ text = "IDLE", color = Color3.fromRGB(150, 150, 150) })
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -453,7 +486,7 @@ local AutofarmToggle = FarmTab:CreateToggle({
     end,
 })
 
-local TargetEggsDropdown = FarmTab:CreateDropdown({
+FarmTab:CreateDropdown({
     Name = "Select Target Eggs",
     Flag = "SelectedEggs",
     Options = ExtractedEggsList,
@@ -473,12 +506,9 @@ local TargetEggsDropdown = FarmTab:CreateDropdown({
     end,
 })
 
--- =================================================================
--- EGG TAB CONTENT
--- =================================================================
+-- Egg Tab
 EggTab:CreateSection({ Name = "🪹 Nest Configuration" })
-
-local NestEggsDropdown = EggTab:CreateDropdown({
+EggTab:CreateDropdown({
     Name = "Select Eggs for Nest",
     Flag = "NestEggs",
     Options = ExtractedEggsList,
@@ -499,10 +529,9 @@ local NestEggsDropdown = EggTab:CreateDropdown({
 })
 
 EggTab:CreateDivider({ line = false, spacing = 16 })
-
 EggTab:CreateSection({ Name = "🔄 Automation Loops" })
 
-local AutoPutToggle = EggTab:CreateToggle({
+EggTab:CreateToggle({
     Name = "Auto Put Egg to Nest",
     Flag = "AutoPutEgg",
     CurrentValue = false,
@@ -537,7 +566,7 @@ local AutoPutToggle = EggTab:CreateToggle({
     end,
 })
 
-local AutoHatchToggle = EggTab:CreateToggle({
+EggTab:CreateToggle({
     Name = "Auto Hatch Egg",
     Flag = "AutoHatchEgg",
     CurrentValue = false,
@@ -572,20 +601,13 @@ local AutoHatchToggle = EggTab:CreateToggle({
     end,
 })
 
--- =================================================================
--- MISC TAB CONTENT
--- =================================================================
+-- Misc Tab
 MiscTab:CreateSection({ Name = "💾 Settings Management" })
-
 MiscTab:CreateButton({
     Name = "💾 Save Config (Manual)",
     Callback = function()
         Window:Save()
-        SafeNotify({
-            Title = "Config Saved",
-            Content = "Saved using KissoHub native system.",
-            Duration = 3
-        })
+        QuickToast("Config Saved", "Preferences saved successfully")
     end,
 })
 
@@ -593,18 +615,12 @@ MiscTab:CreateButton({
     Name = "📂 Reload Config File",
     Callback = function()
         Window:Load()
-        SafeNotify({
-            Title = "Config Reloaded",
-            Content = "Loaded settings using KissoHub native system.",
-            Duration = 3
-        })
+        QuickToast("Config Reloaded", "Loaded user preferences")
     end,
 })
 
 MiscTab:CreateDivider({ text = "teleports" })
-
 MiscTab:CreateSection({ Name = "📍 Fast Teleports" })
-
 MiscTab:CreateButton({ Name = "🥚 TP Egg Tracker Stall", Callback = function() TeleportToStall("EggTracker") end })
 MiscTab:CreateButton({ Name = "🥩 TP Food Stall", Callback = function() TeleportToStall("Food") end })
 MiscTab:CreateButton({ Name = "🏡 TP My Plot", Callback = function() TeleportToMyPlot() end })
@@ -612,24 +628,19 @@ MiscTab:CreateButton({ Name = "⚙️ TP Gears Stall", Callback = function() Tel
 MiscTab:CreateButton({ Name = "💰 TP Sell Stall", Callback = function() TeleportToStall("Sell") end })
 
 MiscTab:CreateDivider({ text = "preferences" })
-
 MiscTab:CreateSection({ Name = "⚙️ Player Options" })
 
-local InfZoomToggle = MiscTab:CreateToggle({
+MiscTab:CreateToggle({
     Name = "Infinite Zoom",
     Flag = "InfZoom",
     CurrentValue = false,
     Callback = function(Value)
         InfZoomEnabled = Value
-        if Value then
-            LocalPlayer.CameraMaxZoomDistance = 100000
-        else
-            LocalPlayer.CameraMaxZoomDistance = 128
-        end
+        LocalPlayer.CameraMaxZoomDistance = Value and 100000 or 128
     end,
 })
 
-local AntiAFKToggle = MiscTab:CreateToggle({
+MiscTab:CreateToggle({
     Name = "Anti-AFK",
     Flag = "AntiAFK",
     CurrentValue = false,
@@ -653,10 +664,9 @@ local AntiAFKToggle = MiscTab:CreateToggle({
 })
 
 MiscTab:CreateDivider({ line = false, spacing = 12 })
-
 MiscTab:CreateSection({ Name = "🚀 Optimization" })
 
-local FastModeToggle = MiscTab:CreateToggle({
+MiscTab:CreateToggle({
     Name = "Fast Mode (FPS Booster)",
     Flag = "FastMode",
     CurrentValue = false,
@@ -665,116 +675,7 @@ local FastModeToggle = MiscTab:CreateToggle({
         if Value then
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
-
-            local terrain = Workspace:FindFirstChildOfClass("Terrain")
-            if terrain then
-                terrain.WaterWaveSize = 0
-                terrain.WaterWaveSpeed = 0
-                terrain.WaterReflectance = 0
-                terrain.WaterTransparency = 0
-            end
-
-            for _, v in ipairs(game:GetDescendants()) do
-                if v:IsA("BasePart") then
-                    v.Material = Enum.Material.SmoothPlastic
-                elseif v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("PostEffect") then
-                    v.Enabled = false
-                end
-            end
-        end
-    end,
-})
-
--- =================================================================
--- CUSTOM TOP HUD UI CREATION (STYLIZED TELEPORT BAR)
--- =================================================================
-local function BuildTopBarHUD()
-    local parentGui = LocalPlayer:WaitForChild("PlayerGui")
-    
-    if parentGui:FindFirstChild("StallTeleportBar") then
-        parentGui.StallTeleportBar:Destroy()
-    end
-
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "StallTeleportBar"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.DisplayOrder = -10
-    ScreenGui.Parent = parentGui
-
-    local Container = Instance.new("Frame")
-    Container.Name = "Container"
-    Container.Size = UDim2.new(0, 620, 0, 42)
-    Container.Position = UDim2.new(0.5, 0, 0, 12)
-    Container.AnchorPoint = Vector2.new(0.5, 0)
-    Container.BackgroundTransparency = 1
-    Container.Parent = ScreenGui
-
-    local UIListLayout = Instance.new("UIListLayout")
-    UIListLayout.FillDirection = Enum.FillDirection.Horizontal
-    UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout.Padding = UDim.new(0, 8)
-    UIListLayout.Parent = Container
-
-    local buttonsData = {
-        { Text = "Egg Tracker 🥚", Target = "EggTracker", Color = Color3.fromRGB(76, 175, 80), Border = Color3.fromRGB(46, 125, 50) },
-        { Text = "Food 🥩", Target = "Food", Color = Color3.fromRGB(244, 67, 54), Border = Color3.fromRGB(183, 28, 28) },
-        { Text = "My Plot 🏡", Target = "MyPlot", Color = Color3.fromRGB(121, 85, 72), Border = Color3.fromRGB(62, 39, 35) },
-        { Text = "Gears ⚙️", Target = "Gears", Color = Color3.fromRGB(33, 150, 243), Border = Color3.fromRGB(13, 71, 161) },
-        { Text = "Sell 💰", Target = "Sell", Color = Color3.fromRGB(255, 193, 7), Border = Color3.fromRGB(245, 124, 0) }
-    }
-
-    for idx, data in ipairs(buttonsData) do
-        local btn = Instance.new("TextButton")
-        btn.Name = data.Target .. "Button"
-        btn.Size = UDim2.new(0, 115, 1, 0)
-        btn.BackgroundColor3 = data.Color
-        btn.Text = data.Text
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Font = Enum.Font.FredokaOne
-        btn.TextSize = 14
-        btn.TextStrokeTransparency = 0.5
-        btn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        btn.LayoutOrder = idx
-        btn.Parent = Container
-
-        local uiCorner = Instance.new("UICorner")
-        uiCorner.CornerRadius = UDim.new(0, 8)
-        uiCorner.Parent = btn
-
-        local uiStroke = Instance.new("UIStroke")
-        uiStroke.Color = data.Border
-        uiStroke.Thickness = 2.5
-        uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        uiStroke.Parent = btn
-
-        btn.MouseEnter:Connect(function()
-            btn.Size = UDim2.new(0, 117, 1, 2)
-        end)
-        btn.MouseLeave:Connect(function()
-            btn.Size = UDim2.new(0, 115, 1, 0)
-        end)
-        btn.MouseButton1Click:Connect(function()
-            if data.Target == "MyPlot" then
-                TeleportToMyPlot()
-            else
-                TeleportToStall(data.Target)
-            end
-        end)
-    end
-end
-
-BuildTopBarHUD()
-
-local ShowTopBarToggle = MiscTab:CreateToggle({
-    Name = "Show Top Teleport Bar",
-    Flag = "ShowTopBar",
-    CurrentValue = true,
-    Callback = function(Value)
-        local parentGui = LocalPlayer:FindFirstChild("PlayerGui")
-        local bar = parentGui and parentGui:FindFirstChild("StallTeleportBar")
-        if bar then
-            bar.Enabled = Value
+            QuickToast("FPS Boost", "Graphics optimized")
         end
     end,
 })
@@ -809,10 +710,6 @@ task.spawn(function()
                 end
             end
 
-            if InfZoomEnabled then
-                LocalPlayer.CameraMaxZoomDistance = 100000
-            end
-
             SessionStat:Set(elapsedMinutes)
             FeaturesStat:Set(activeFeatures)
             FpsStat:Set(fps)
@@ -828,41 +725,6 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    while task.wait(1) do
-        if EggESPEnabled then
-            local renderedFolder = Workspace:FindFirstChild("RenderedEggs")
-            if renderedFolder then
-                for _, egg in ipairs(renderedFolder:GetChildren()) do
-                    if not ActiveHighlights[egg] then
-                        local hl = Instance.new("Highlight")
-                        hl.Adornee = egg
-                        hl.FillColor = Color3.fromRGB(0, 188, 255)
-                        hl.Parent = egg
-                        ActiveHighlights[egg] = hl
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- Initial Startup Notification
-SafeNotify({
-    Title = "KissoHub Loaded",
-    Content = "Successfully initialized. Enjoy the script!",
-    Duration = 4,
-    Image = 107078844281790
-})
-
--- =================================================================
--- DEFERRED NATIVE CONFIGURATION LOAD
--- =================================================================
-task.defer(function()
-    local success, err = pcall(function()
-        Window:Load()
-    end)
-    if not success then
-        warn("KissoHub Config Load Error: " .. tostring(err))
-    end
-end)
+-- Initial Startup Toast & Notification
+QuickToast("KissoHub", "Loaded successfully")
+SafeNotify("Welcome", "KissoHub v1.0.0 is ready to use.", 4)
