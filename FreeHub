@@ -286,7 +286,7 @@ local function InteractWithEgg(egg)
 end
 
 -- =================================================================
--- WINDOW & TABS CREATION (AUTO-LOAD HANDLED MANUALLY VIA DEFER)
+-- WINDOW & TABS CREATION
 -- =================================================================
 local Window = Rayfield:CreateWindow({
     Name = "Egg Hub",
@@ -316,6 +316,8 @@ local GrabbedStat = HomeTab:CreateStat({ name = "🥚 Eggs Grabbed", value = 0, 
 local HatchedStat = HomeTab:CreateStat({ name = "🐣 Eggs Hatched", value = 0, compact = true })
 local SoldStat = HomeTab:CreateStat({ name = "🐶 Pets Sold", value = 0, compact = true })
 
+HomeTab:CreateDivider({ spacing = 14 })
+
 HomeTab:CreateSection({ Name = "⚡ System Status" })
 
 local SessionStat = HomeTab:CreateStat({ name = "⏱️ Session", value = 0, suffix = " m", compact = true })
@@ -323,6 +325,8 @@ local FeaturesStat = HomeTab:CreateStat({ name = "⚙️ Features Active", value
 local FpsStat = HomeTab:CreateStat({ name = "🎮 FPS", value = 0, compact = true })
 local PingStat = HomeTab:CreateStat({ name = "📡 Ping", value = 0, suffix = " ms", compact = true })
 local PlayersStat = HomeTab:CreateStat({ name = "👥 Players", value = 1, compact = true })
+
+HomeTab:CreateDivider({ text = "controls" })
 
 HomeTab:CreateSection({ Name = "🌐 Server Utilities" })
 
@@ -374,6 +378,9 @@ local FlySpeedSlider = FarmTab:CreateSlider({
         FlySpeed = Value
     end,
 })
+
+-- Added explicit divider to split visual config from core loop
+FarmTab:CreateDivider({ text = "execution" })
 
 FarmTab:CreateSection({ Name = "🌾 Farm Controls" })
 
@@ -473,6 +480,9 @@ local NestEggsDropdown = EggTab:CreateDropdown({
         end
     end,
 })
+
+-- Clean spacer divider between nest filters and active handlers
+EggTab:CreateDivider({ line = false, spacing = 16 })
 
 EggTab:CreateSection({ Name = "🔄 Automation Loops" })
 
@@ -575,6 +585,8 @@ MiscTab:CreateButton({
     end,
 })
 
+MiscTab:CreateDivider({ text = "teleports" })
+
 MiscTab:CreateSection({ Name = "📍 Fast Teleports" })
 
 MiscTab:CreateButton({ Name = "🥚 TP Egg Tracker Stall", Callback = function() TeleportToStall("EggTracker") end })
@@ -582,6 +594,8 @@ MiscTab:CreateButton({ Name = "🥩 TP Food Stall", Callback = function() Telepo
 MiscTab:CreateButton({ Name = "🏡 TP My Plot", Callback = function() TeleportToMyPlot() end })
 MiscTab:CreateButton({ Name = "⚙️ TP Gears Stall", Callback = function() TeleportToStall("Gears") end })
 MiscTab:CreateButton({ Name = "💰 TP Sell Stall", Callback = function() TeleportToStall("Sell") end })
+
+MiscTab:CreateDivider({ text = "preferences" })
 
 MiscTab:CreateSection({ Name = "⚙️ Player Options" })
 
@@ -621,6 +635,8 @@ local AntiAFKToggle = MiscTab:CreateToggle({
         end
     end,
 })
+
+MiscTab:CreateDivider({ line = false, spacing = 12 })
 
 MiscTab:CreateSection({ Name = "🚀 Optimization" })
 
