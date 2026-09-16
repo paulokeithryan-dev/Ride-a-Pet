@@ -13,20 +13,20 @@ local Window = Rayfield:CreateWindow({
 -- Tabs Setup
 local HomeTab = Window:CreateTab({
     Name = "Home",
-    Icon = 4483362458
+    Icon = 0
 })
 
 local FarmTab = Window:CreateTab({
     Name = "Egg Automation",
-    Icon = 4483362458
+    Icon = 0
 })
 
 local EggTab = Window:CreateTab({
     Name = "Egg",
-    Icon = 4483362458
+    Icon = 0
 })
 
--- Extracted Eggs List from ModuleScript
+-- Extracted Eggs List
 local ExtractedEggsList = {
     "Dragon Egg", "Giant Egg", "White Egg", "Brown Egg", "Cracked Egg",
     "Easter Egg", "Stone Egg", "Leaf Egg", "Mushroom Egg", "Flower Egg",
@@ -60,14 +60,30 @@ local EggsGrabbedCount = 0
 local EggsPlacedCount = 0
 local EggsHatchedCount = 0
 
--- UI Elements for Live Home Display
-HomeTab:CreateSection("Session Status")
+-- Safe Ping Getter
+local function GetPing()
+    local ping = 0
+    pcall(function()
+        if LocalPlayer and LocalPlayer:FindFirstChild("GetNetworkPing") then
+            ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
+        elseif StatsService:FindFirstChild("Network") and StatsService.Network:FindFirstChild("ServerStatsItem") then
+            local pingItem = StatsService.Network.ServerStatsItem:FindFirstChild("Data Ping")
+            if pingItem then
+                ping = math.floor(pingItem:GetValue())
+            end
+        end
+    end)
+    return ping
+end
+
+-- HOME TAB SETUP
+HomeTab:CreateSection({ Name = "Session Status" })
 local StatusParagraph = HomeTab:CreateParagraph({
-    Title = "Status",
+    Title = "Status Overview",
     Content = "Loading session status..."
 })
 
-HomeTab:CreateSection("Server Information")
+HomeTab:CreateSection({ Name = "Server Information" })
 local ServerParagraph = HomeTab:CreateParagraph({
     Title = "Server Details",
     Content = "Loading server details..."
@@ -81,16 +97,15 @@ HomeTab:CreateButton({
             Rayfield:Notify({
                 Title = "Clipboard",
                 Content = "Job ID copied to clipboard!",
-                Duration = 2,
-                Image = 4483362458
+                Duration = 2
             })
         end
     end,
 })
 
-HomeTab:CreateSection("Farm Statistics")
+HomeTab:CreateSection({ Name = "Farm Statistics" })
 local StatsParagraph = HomeTab:CreateParagraph({
-    Title = "Stats",
+    Title = "Session Statistics",
     Content = "Loading farm statistics..."
 })
 
@@ -162,7 +177,7 @@ local function IsNestFree(nest)
     return true
 end
 
--- Held/Inventory Egg Matcher for Nest Placement
+-- Held/Inventory Egg Matcher
 local function CheckAndEquipNestEgg()
     if next(NestEggsLookup) == nil then return true end
 
@@ -190,7 +205,7 @@ local function CheckAndEquipNestEgg()
     return true
 end
 
--- Realtime-Validated Flight Helper
+-- Flight Helper
 local function FlyToTarget(target)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
@@ -229,7 +244,7 @@ local function FlyToTarget(target)
     return false
 end
 
--- Instant Proximity Prompt Trigger
+-- Interactive Egg Trigger
 local function InteractWithEgg(egg)
     if not (egg and egg.Parent and egg:IsDescendantOf(Workspace)) then return end
     local prompt = egg:FindFirstChildWhichIsA("ProximityPrompt", true)
@@ -328,6 +343,7 @@ FarmTab:CreateSlider({
 FarmTab:CreateDropdown({
     Name = "Select Target Eggs",
     Options = ExtractedEggsList,
+    CurrentOption = {},
     MultipleOptions = true,
     Flag = "EggSelection",
     Callback = function(Options)
@@ -344,10 +360,11 @@ FarmTab:CreateDropdown({
     end,
 })
 
--- TAB 2: EGG (Nest & Hatch Automation)
+-- TAB 2: EGG (Nest & Hatch)
 EggTab:CreateDropdown({
     Name = "Select Eggs for Nest",
     Options = ExtractedEggsList,
+    CurrentOption = {},
     MultipleOptions = true,
     Flag = "NestEggSelection",
     Callback = function(Options)
@@ -438,36 +455,35 @@ EggTab:CreateToggle({
     end,
 })
 
--- Live Dashboard Update Loop
+-- Dashboard Update Loop
 task.spawn(function()
     while task.wait(0.5) do
-        -- Calculate Session Time
-        local elapsed = os.time() - SessionStartTime
-        local hours = math.floor(elapsed / 3600)
-        local mins = math.floor((elapsed % 3600) / 60)
-        local secs = elapsed % 60
-        local sessionStr = string.format("%dh %dm %ds", hours, mins, secs)
+        pcall(function()
+            local elapsed = os.time() - SessionStartTime
+            local hours = math.floor(elapsed / 3600)
+            local mins = math.floor((elapsed % 3600) / 60)
+            local secs = elapsed % 60
+            local sessionStr = string.format("%dh %dm %ds", hours, mins, secs)
 
-        -- Calculate FPS & Ping
-        local ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
-        local fps = math.floor(Workspace:GetRealPhysicsFPS())
-        local activeFeatures = (AutofarmEnabled and 1 or 0) + (EggESPEnabled and 1 or 0) + (AutoNestEnabled and 1 or 0) + (AutoHatchEnabled and 1 or 0)
+            local ping = GetPing()
+            local fps = math.floor(Workspace:GetRealPhysicsFPS())
+            local activeFeatures = (AutofarmEnabled and 1 or 0) + (EggESPEnabled and 1 or 0) + (AutoNestEnabled and 1 or 0) + (AutoHatchEnabled and 1 or 0)
 
-        -- Update Home Tab Paragraphs
-        StatusParagraph:Set({
-            Title = "Status Overview",
-            Content = string.format("⏱️ Session Time: %s\n⚡ Features On: %d\n🎯 FPS: %d\n📶 Ping: %d ms", sessionStr, activeFeatures, fps, ping)
-        })
+            StatusParagraph:Set({
+                Title = "Status Overview",
+                Content = string.format("⏱️ Session Time: %s\n⚡ Features On: %d\n🎯 FPS: %d\n📶 Ping: %d ms", sessionStr, activeFeatures, fps, ping)
+            })
 
-        ServerParagraph:Set({
-            Title = "Server Details",
-            Content = string.format("🎮 Place ID: %d\n🔑 Job ID: %s\n👥 Players: %d / %d", game.PlaceId, game.JobId ~= "" and game.JobId or "Solo / Studio", #Players:GetPlayers(), Players.MaxPlayers)
-        })
+            ServerParagraph:Set({
+                Title = "Server Details",
+                Content = string.format("🎮 Place ID: %d\n🔑 Job ID: %s\n👥 Players: %d / %d", game.PlaceId, game.JobId ~= "" and game.JobId or "Solo / Studio", #Players:GetPlayers(), Players.MaxPlayers)
+            })
 
-        StatsParagraph:Set({
-            Title = "Session Statistics",
-            Content = string.format("🥚 Eggs Grabbed: %d\n🪹 Eggs Placed: %d\n🐣 Eggs Hatched: %d", EggsGrabbedCount, EggsPlacedCount, EggsHatchedCount)
-        })
+            StatsParagraph:Set({
+                Title = "Session Statistics",
+                Content = string.format("🥚 Eggs Grabbed: %d\n🪹 Eggs Placed: %d\n🐣 Eggs Hatched: %d", EggsGrabbedCount, EggsPlacedCount, EggsHatchedCount)
+            })
+        end)
     end
 end)
 
@@ -491,5 +507,7 @@ task.spawn(function()
     end
 end)
 
--- Load Saved Configuration on Startup
-Rayfield:LoadConfiguration()
+-- Safe Config Load
+pcall(function()
+    Rayfield:LoadConfiguration()
+end)
