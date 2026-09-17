@@ -132,7 +132,8 @@ local Window = Rayfield:CreateWindow({
     Name = "KissoHub",
     LoadingTitle = "KissoHub Loading...",
     LoadingSubtitle = "Brought to you by Kisso",
-    
+    sidebarLayout = true,
+
     ShowText = "KissoHub",
     Icon = ASSET_ICON,
 
